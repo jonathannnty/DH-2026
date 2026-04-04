@@ -1,0 +1,12 @@
+# ── Core ──────────────────────────────────────────────────────────────────────
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2.9
+anthropic>=0.40
+python-dotenv>=1.0
+
+# ── Browser Use (optional — enriches recommendations with live job market data) ──
+# Requires Playwright browsers: run `playwright install chromium` after pip install
+browser-use>=0.1.40
+langchain-anthropic>=0.3
+playwright>=1.49

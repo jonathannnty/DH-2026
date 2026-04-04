@@ -15,6 +15,8 @@ import {
 import { startAnalysis, getStatus, isAgentReachable } from '../services/agent.js';
 import { processIntakeMessage, getGreeting } from '../services/intake.js';
 import { getRecommendationsForTrack } from '../services/demo.js';
+import { generatePersonalizedFallback } from '../services/personalizedFallback.js';
+import { getAdapter } from '../services/adapters.js';
 import { isValidTrack } from '../services/tracks.js';
 import { loadEnv } from '../env.js';
 
@@ -266,48 +268,110 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         return;
       }
 
-      // ── Live mode: poll agent service with graceful fallback ──
-      let retries = 0;
-      const MAX_RETRIES = 3;
+      // ── Live mode: poll agent service with 20s hard timeout + personalized fallback ──
+      const ANALYSIS_TIMEOUT_MS = 20_000;
+      const POLL_INTERVAL_MS = 2_000;
+      const MAX_POLL_FAILURES = 3;
 
-      const fallbackToDemo = async () => {
-        app.log.warn({ sessionId: req.params.id }, 'Agent service unreachable — using demo fallback');
-        const trackId = row.trackId ?? null;
-        const recs = getRecommendationsForTrack(trackId);
-        await db
-          .update(sessions)
-          .set({ status: 'complete', recommendations: JSON.stringify(recs), updatedAt: now() })
-          .where(eq(sessions.id, req.params.id));
-        send({ type: 'progress', payload: { status: 'analyzing', progress: 100, stage: 'Finalizing results' } });
-        send({ type: 'complete', payload: { status: 'complete', progress: 100 } });
-        reply.raw.end();
+      const profile = parseJson<CareerProfile>(row.profile, {});
+      const trackId = row.trackId ?? null;
+
+      let pollFailures = 0;
+      let terminated = false;
+
+      /** Invoke personalized fallback: generate profile-derived recs, persist, close stream. */
+      const invokeFallback = async (reason: string) => {
+        if (terminated) return;
+        terminated = true;
+        clearInterval(poll);
+        clearTimeout(timeoutHandle);
+
+        app.log.warn({ sessionId: req.params.id, reason }, 'Analysis fallback triggered');
+
+        send({
+          type: 'progress',
+          payload: { status: 'analyzing', progress: 85, stage: 'Switching to personalised recommendations…', isFallback: true },
+        });
+
+        try {
+          // Generate profile-derived recs, then apply track enrichment adapter
+          const rawRecs = generatePersonalizedFallback(profile, trackId);
+          const adapter = getAdapter(trackId ?? 'general');
+          const recs = await adapter.enrich(profile, rawRecs);
+
+          await db
+            .update(sessions)
+            .set({ status: 'complete', recommendations: JSON.stringify(recs), updatedAt: now() })
+            .where(eq(sessions.id, req.params.id));
+
+          send({ type: 'complete', payload: { status: 'complete', progress: 100, isFallback: true } });
+        } catch (err) {
+          app.log.error(err, 'Fallback recommendation generation failed');
+          send({ type: 'error', payload: { message: 'Analysis could not be completed. Please try again.' } });
+        } finally {
+          reply.raw.end();
+        }
       };
 
+      // Hard 20-second wall-clock deadline — guaranteed terminal transition
+      const timeoutHandle = setTimeout(() => {
+        invokeFallback('20s analysis timeout exceeded');
+      }, ANALYSIS_TIMEOUT_MS);
+
       const poll = setInterval(async () => {
+        if (terminated) return;
+
         try {
           const agentStatus = await getStatus(req.params.id);
-          retries = 0;
-          send({ type: 'progress', payload: agentStatus });
+          pollFailures = 0;
 
-          if (agentStatus.status === 'complete' || agentStatus.status === 'error') {
-            send({ type: agentStatus.status, payload: agentStatus });
+          send({
+            type: 'progress',
+            payload: { status: agentStatus.status, progress: agentStatus.progress, stage: agentStatus.stage },
+          });
+
+          if (agentStatus.status === 'complete') {
+            if (terminated) return;
+            terminated = true;
             clearInterval(poll);
+            clearTimeout(timeoutHandle);
+
+            let recs: CareerRecommendation[];
+
+            if (agentStatus.recommendations?.length) {
+              // Apply track enrichment to live agent recs
+              const adapter = getAdapter(trackId ?? 'general');
+              recs = await adapter.enrich(profile, agentStatus.recommendations);
+            } else {
+              // Agent completed but returned no recs — use personalized fallback
+              const rawRecs = generatePersonalizedFallback(profile, trackId);
+              const adapter = getAdapter(trackId ?? 'general');
+              recs = await adapter.enrich(profile, rawRecs);
+            }
+
+            await db
+              .update(sessions)
+              .set({ status: 'complete', recommendations: JSON.stringify(recs), updatedAt: now() })
+              .where(eq(sessions.id, req.params.id));
+
+            send({ type: 'complete', payload: { status: 'complete', progress: 100 } });
             reply.raw.end();
+          } else if (agentStatus.status === 'error') {
+            await invokeFallback(`agent reported error: ${agentStatus.error ?? 'unknown'}`);
           }
         } catch {
-          retries++;
-          if (retries >= MAX_RETRIES) {
-            clearInterval(poll);
-            // Degrade gracefully: complete the session with track-appropriate demo results
-            await fallbackToDemo().catch(() => {
-              send({ type: 'error', payload: { message: 'Lost connection to agent service' } });
-              reply.raw.end();
-            });
+          pollFailures++;
+          if (pollFailures >= MAX_POLL_FAILURES) {
+            await invokeFallback('agent service unreachable after 3 consecutive poll failures');
           }
         }
-      }, 2000);
+      }, POLL_INTERVAL_MS);
 
-      req.raw.on('close', () => clearInterval(poll));
+      req.raw.on('close', () => {
+        terminated = true;
+        clearInterval(poll);
+        clearTimeout(timeoutHandle);
+      });
     },
   );
 
@@ -347,25 +411,21 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       }
 
       // ── Live mode ──
-      const agentUp = await isAgentReachable();
-      if (!agentUp) {
-        return reply.serviceUnavailable(
-          'Agent service is not reachable. Please try again later.',
-        );
-      }
-
+      // Always transition to 'analyzing' — if the agent is unreachable the
+      // SSE stream's 20s timeout will invoke personalized fallback automatically.
       await db
         .update(sessions)
         .set({ status: 'analyzing', updatedAt: ts })
         .where(eq(sessions.id, req.params.id));
 
-      startAnalysis(req.params.id, profile).catch(async (err) => {
-        app.log.error(err, 'Analysis failed, transitioning to error');
-        await db
-          .update(sessions)
-          .set({ status: 'error', updatedAt: now() })
-          .where(eq(sessions.id, req.params.id));
-      });
+      const agentUp = await isAgentReachable();
+      if (agentUp) {
+        startAnalysis(req.params.id, profile, row.trackId).catch((err) => {
+          app.log.warn(err, 'startAnalysis call failed — SSE timeout will trigger fallback');
+        });
+      } else {
+        app.log.warn({ sessionId: req.params.id }, 'Agent unreachable at analyze time — SSE timeout will trigger personalized fallback');
+      }
 
       return reply.send({ ok: true as const });
     },
