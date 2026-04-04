@@ -7,10 +7,9 @@ import {
   type SendMessageResponse,
   type CareerRecommendation,
   type SponsorTrack,
-} from '@/schemas/career';
+} from "@/schemas/career";
 
-const BASE_URL =
-  import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 class ApiError extends Error {
   constructor(
@@ -18,17 +17,19 @@ class ApiError extends Error {
     message: string,
   ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
   }
 }
 
-async function request(
-  path: string,
-  options?: RequestInit,
-): Promise<unknown> {
+async function request(path: string, options?: RequestInit): Promise<unknown> {
+  const headers = new Headers(options?.headers);
+  if (options?.body !== undefined && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers,
   });
   if (!res.ok) {
     const body = await res.text();
@@ -38,14 +39,16 @@ async function request(
 }
 
 export async function getTracks(): Promise<SponsorTrack[]> {
-  const data = await request('/tracks');
+  const data = await request("/tracks");
   const parsed = TrackRegistryResponseSchema.parse(data);
   return parsed.tracks;
 }
 
-export async function createSession(trackId?: string): Promise<SessionResponse> {
-  const data = await request('/sessions', {
-    method: 'POST',
+export async function createSession(
+  trackId?: string,
+): Promise<SessionResponse> {
+  const data = await request("/sessions", {
+    method: "POST",
     body: JSON.stringify(trackId ? { trackId } : {}),
   });
   return SessionResponseSchema.parse(data);
@@ -61,7 +64,7 @@ export async function sendMessage(
   content: string,
 ): Promise<SendMessageResponse> {
   const data = await request(`/sessions/${sessionId}/messages`, {
-    method: 'POST',
+    method: "POST",
     body: JSON.stringify({ content }),
   });
   return SendMessageResponseSchema.parse(data);
@@ -71,7 +74,7 @@ export async function triggerAnalysis(
   sessionId: string,
 ): Promise<{ ok: true }> {
   const data = await request(`/sessions/${sessionId}/analyze`, {
-    method: 'POST',
+    method: "POST",
   });
   return data as { ok: true };
 }

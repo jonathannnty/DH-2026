@@ -75,6 +75,30 @@ function ScoreBadge({ score }: { score: number }) {
   );
 }
 
+function FallbackBanner() {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      padding: '10px 16px',
+      background: 'rgba(245, 158, 11, 0.08)',
+      border: '1px solid rgba(245, 158, 11, 0.3)',
+      borderRadius: 'var(--radius)',
+      marginBottom: 16,
+      fontSize: '0.82rem',
+      color: 'var(--warning)',
+    }}>
+      <span style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Personalised Fallback Mode
+      </span>
+      <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
+        — Live analysis timed out. These recommendations are derived from your profile using our offline engine.
+      </span>
+    </div>
+  );
+}
+
 function TrackBanner({ track }: { track: SponsorTrack }) {
   return (
     <div style={{
@@ -111,6 +135,7 @@ export default function Results() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState('Starting analysis…');
+  const [isFallback, setIsFallback] = useState(false);
 
   const track = useTrack(session?.trackId);
   const shouldStream = session?.status === 'analyzing';
@@ -135,6 +160,7 @@ export default function Results() {
     }
 
     if (type === 'complete' && sessionId) {
+      if ((payload as { isFallback?: boolean }).isFallback) setIsFallback(true);
       getRecommendations(sessionId).then(setRecs).catch(() => setRecs([]));
       getSession(sessionId).then(setSession).catch(() => {});
     }
@@ -143,6 +169,20 @@ export default function Results() {
       setFetchError('Analysis encountered an error. You can retry from the dashboard.');
     }
   }, [stream.latestEvent, sessionId]);
+
+  // SSE closed without delivering recs (connection dropped) — re-fetch session once
+  useEffect(() => {
+    if (stream.status !== 'closed' && stream.status !== 'error') return;
+    if (recs || fetchError || !sessionId) return;
+    getSession(sessionId)
+      .then((s) => {
+        setSession(s);
+        if (s.status === 'complete') {
+          getRecommendations(sessionId).then(setRecs).catch(() => setRecs([]));
+        }
+      })
+      .catch(() => setFetchError('Lost connection to analysis stream. Please reload.'));
+  }, [stream.status, recs, fetchError, sessionId]);
 
   // If session is already complete on load
   useEffect(() => {
@@ -286,6 +326,7 @@ export default function Results() {
   return (
     <div style={wrap}>
       <div style={{ marginBottom: 32 }}>
+        {isFallback && <FallbackBanner />}
         {track && <TrackBanner track={track} />}
         <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: 8 }}>
           {recs.length === 1

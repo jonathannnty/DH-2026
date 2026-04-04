@@ -3,6 +3,13 @@ dist/
 .env
 *.db
 *.sqlite
+*.db-wal
+*.db-shm
 *.tsbuildinfo
 .vite/
 coverage/
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo

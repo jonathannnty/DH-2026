@@ -1,4 +1,4 @@
-import type { CareerProfile } from '../schemas/career.js';
+import type { CareerProfile, CareerRecommendation } from '../schemas/career.js';
 
 const AGENT_URL =
   process.env.AGENT_SERVICE_URL ?? 'http://localhost:8000';
@@ -19,20 +19,28 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
+export interface AgentStatus {
+  status: string;
+  progress: number;
+  stage?: string;
+  /** Present when status === 'complete'. */
+  recommendations?: CareerRecommendation[];
+  error?: string;
+}
+
 export async function startAnalysis(
   sessionId: string,
   profile: CareerProfile,
+  trackId?: string | null,
 ): Promise<void> {
   await request('/analyze', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, profile }),
+    body: JSON.stringify({ sessionId, profile, trackId: trackId ?? null }),
   });
 }
 
-export async function getStatus(
-  sessionId: string,
-): Promise<{ status: string; progress: number }> {
-  return request(`/status/${sessionId}`);
+export async function getStatus(sessionId: string): Promise<AgentStatus> {
+  return request<AgentStatus>(`/status/${sessionId}`);
 }
 
 /** Quick connectivity check — true if the agent service responds to /health. */

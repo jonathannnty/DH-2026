@@ -117,7 +117,11 @@ describe('Ops: control panel', () => {
       payload: { status: 'complete' },
     });
     expect(force.statusCode).toBe(200);
-    expect(force.json()).toEqual({ id, from: 'intake', to: 'complete' });
+    const body = force.json();
+    expect(body.id).toBe(id);
+    expect(body.from).toBe('intake');
+    expect(body.to).toBe('complete');
+    expect(body.auditedAt).toBeDefined();
 
     // Verify
     const get = await app.inject({ method: 'GET', url: `/sessions/${id}` });

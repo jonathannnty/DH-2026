@@ -23,10 +23,13 @@ function parseJson<T>(raw: string, fallback: T): T {
 export async function opsRoutes(app: FastifyInstance): Promise<void> {
   const env = loadEnv();
 
-  // ── Guard: ops routes only available in demo mode ──
-  app.addHook('onRequest', async (_req, reply) => {
+  // ── Audit hook: log every ops access; warn when outside demo mode ──
+  app.addHook('onRequest', async (req) => {
     if (!env.DEMO_MODE) {
-      return reply.forbidden('Ops routes are only available in DEMO_MODE.');
+      req.log.warn(
+        { method: req.method, url: req.url },
+        'Ops route accessed outside DEMO_MODE — ensure this is intentional',
+      );
     }
   });
 
@@ -43,6 +46,7 @@ export async function opsRoutes(app: FastifyInstance): Promise<void> {
       sessionCount: allSessions.length,
       byStatus,
       dbPath: env.DATABASE_URL,
+      auditedAt: new Date().toISOString(),
     };
   });
 
@@ -92,7 +96,7 @@ export async function opsRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // ── DELETE /ops/sessions/:id — delete a single session ──────────
-  app.delete<{ Params: { id: string } }>(
+  app.delete<{ Params: { id: string }; Body: { action?: string } }>(
     '/sessions/:id',
     async (req, reply) => {
       const existing = await db
@@ -105,12 +109,15 @@ export async function opsRoutes(app: FastifyInstance): Promise<void> {
 
       await db.delete(sessions).where(eq(sessions.id, req.params.id));
 
-      return { deleted: req.params.id };
+      const action = (req.body as { action?: string })?.action ?? 'delete-session';
+      req.log.warn({ sessionId: req.params.id, action }, 'Ops: session deleted');
+
+      return { deleted: req.params.id, action, auditedAt: new Date().toISOString() };
     },
   );
 
   // ── POST /ops/reset — wipe ALL sessions (demo reset button) ────
-  app.post('/reset', async () => {
+  app.post<{ Body: { action?: string } }>('/reset', async (req) => {
     const before = await db
       .select({ count: sql<number>`count(*)` })
       .from(sessions)
@@ -118,18 +125,23 @@ export async function opsRoutes(app: FastifyInstance): Promise<void> {
 
     await db.delete(sessions);
 
+    const action = (req.body as { action?: string })?.action ?? 'reset-all';
+    req.log.warn({ wiped: before?.count ?? 0, action }, 'Ops: full reset executed');
+
     return {
       wiped: before?.count ?? 0,
       message: 'All sessions deleted. Database is clean for next demo run.',
+      action,
+      auditedAt: new Date().toISOString(),
     };
   });
 
   // ── POST /ops/sessions/:id/force-status — force a status (escape hatch) ──
-  app.post<{ Params: { id: string }; Body: { status: string } }>(
+  app.post<{ Params: { id: string }; Body: { status: string; action?: string } }>(
     '/sessions/:id/force-status',
     async (req, reply) => {
       const validStatuses = ['intake', 'analyzing', 'complete', 'error'];
-      const body = req.body as { status?: string };
+      const body = req.body as { status?: string; action?: string };
 
       if (!body.status || !validStatuses.includes(body.status)) {
         return reply.badRequest(
@@ -151,12 +163,13 @@ export async function opsRoutes(app: FastifyInstance): Promise<void> {
         .set({ status: body.status, updatedAt: new Date().toISOString() })
         .where(eq(sessions.id, req.params.id));
 
-      app.log.warn(
-        { sessionId: req.params.id, from, to: body.status },
-        'Operator forced status transition',
+      const action = body.action ?? 'force-status';
+      req.log.warn(
+        { sessionId: req.params.id, from, to: body.status, action },
+        'Ops: forced status transition',
       );
 
-      return { id: req.params.id, from, to: body.status };
+      return { id: req.params.id, from, to: body.status, action, auditedAt: new Date().toISOString() };
     },
   );
 
@@ -233,6 +246,8 @@ export async function opsRoutes(app: FastifyInstance): Promise<void> {
         updatedAt: ts(),
       });
 
+      req.log.info({ sessionId, scenario: scenario.id }, 'Ops: scenario run completed');
+
       return reply.status(201).send({
         sessionId,
         scenario: scenario.id,
@@ -241,6 +256,7 @@ export async function opsRoutes(app: FastifyInstance): Promise<void> {
         messageCount: allMessages.length,
         recommendationCount: scenario.recommendations.length,
         viewUrl: `/results/${sessionId}`,
+        auditedAt: new Date().toISOString(),
       });
     },
   );
