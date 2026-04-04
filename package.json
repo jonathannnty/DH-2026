@@ -10,7 +10,14 @@
     "dev": "concurrently -n frontend,api -c green,blue \"npm run dev --workspace frontend\" \"npm run dev --workspace api\"",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "test:agents": "python scripts/test-agents.py --level all",
+    "test:agents:level1": "python scripts/test-agents.py --level 1",
+    "test:agents:level2": "python scripts/test-agents.py --level 2",
+    "test:agents:level2:debug": "python scripts/test-agents-level2-debug.py",
+    "test:agents:level2:debug:3001": "python scripts/test-agents-level2-debug.py --backend-port 3001",
+    "test:agents:level3": "python scripts/test-agents.py --level 3",
+    "test:all": "npm run test && npm run test:agents"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

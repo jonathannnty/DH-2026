@@ -227,37 +227,33 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         // Track-specific stage labels give each track a distinct feel
         const stageLabels: [number, string][] = trackId === 'tech-career'
           ? [
-            [20, agentStages['research'] || 'Scanning tech job market signals'],
-            [40, agentStages['profile_analysis'] || 'Scoring engineering career fits'],
-            [60, agentStages['recommendations'] || 'Mapping salary bands and growth paths'],
-            [80, agentStages['verification'] || 'Validating recommendations'],
-            [100, agentStages['report_generation'] || 'Finalizing your Tech Career report'],
+            [25, agentStages['research'] || 'Scanning tech job market signals'],
+            [50, agentStages['profile_analysis'] || 'Scoring engineering career fits'],
+            [75, agentStages['recommendations'] || 'Mapping salary bands and growth paths'],
+            [100, agentStages['verification'] || 'Validating recommendations'],
           ]
           : trackId === 'healthcare-pivot'
           ? [
-            [20, 'Researching healthcare sector opportunities'],
-            [40, 'Analyzing your healthcare fit'],
-            [60, 'Identifying clinical and health-tech roles'],
-            [80, 'Verifying licensure requirements'],
+            [25, 'Researching healthcare sector opportunities'],
+            [50, 'Analyzing your healthcare fit'],
+            [75, 'Identifying clinical and health-tech roles'],
             [100, agentStages['report_generation'] || 'Finalizing your Healthcare Career report'],
           ]
           : trackId === 'creative-industry'
           ? [
-            [20, 'Analysing creative industry landscape'],
-            [40, 'Scoring portfolio and skills alignment'],
-            [60, agentStages['recommendations'] || 'Identifying studio and freelance opportunities'],
-            [80, agentStages['verification'] || 'Validating creative opportunities'],
-            [100, agentStages['report_generation'] || 'Finalizing your Creative Industry report'],
+            [25, 'Analysing creative industry landscape'],
+            [50, 'Scoring portfolio and skills alignment'],
+            [75, agentStages['recommendations'] || 'Identifying studio and freelance opportunities'],
+            [100, agentStages['verification'] || 'Validating creative opportunities'],
           ]
           : [
-            [20, agentStages['research'] || 'Evaluating career fit'],
-            [40, agentStages['profile_analysis'] || 'Analyzing your profile'],
-            [60, agentStages['recommendations'] || 'Generating recommendations'],
-            [80, agentStages['verification'] || 'Verifying results'],
-            [100, agentStages['report_generation'] || 'Finalizing results'],
+            [25, agentStages['research'] || 'Evaluating career fit'],
+            [50, agentStages['profile_analysis'] || 'Analyzing your profile'],
+            [75, agentStages['recommendations'] || 'Generating recommendations'],
+            [100, agentStages['verification'] || 'Verifying results'],
           ];
 
-        const delays = [500, 800, 600, 700, 400];
+        const delays = [500, 800, 600, 700];
         const steps = [
           ...stageLabels.map(([progress, stage], i) => ({
             delay: delays[i],
@@ -481,13 +477,26 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         .set({ status: 'analyzing', updatedAt: ts })
         .where(eq(sessions.id, req.params.id));
 
-      startAnalysis(req.params.id, profile, row.trackId ?? undefined).catch(async (err) => {
-        app.log.error(err, 'Analysis failed, transitioning to error');
-        await db
-          .update(sessions)
-          .set({ status: 'error', updatedAt: now() })
-          .where(eq(sessions.id, req.params.id));
-      });
+      startAnalysis(req.params.id, profile, row.trackId ?? undefined)
+        .then(async () => {
+          // Update session to complete with recommendations
+          const recommendations = getRecommendationsForTrack(row.trackId ?? null);
+          await db
+            .update(sessions)
+            .set({
+              status: 'complete',
+              recommendations: JSON.stringify(recommendations),
+              updatedAt: now(),
+            })
+            .where(eq(sessions.id, req.params.id));
+        })
+        .catch(async (err) => {
+          app.log.error(err, 'Analysis failed, transitioning to error');
+          await db
+            .update(sessions)
+            .set({ status: 'error', updatedAt: now() })
+            .where(eq(sessions.id, req.params.id));
+        });
 
       return reply.send({ ok: true as const });
     },
