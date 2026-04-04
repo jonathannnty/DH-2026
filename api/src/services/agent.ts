@@ -50,15 +50,6 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
-export interface AgentStatus {
-  status: string;
-  progress: number;
-  stage?: string;
-  /** Present when status === 'complete'. */
-  recommendations?: CareerRecommendation[];
-  error?: string;
-}
-
 // ==================== Multi-Agent APIs ====================
 
 /**
@@ -68,11 +59,11 @@ export interface AgentStatus {
 export async function startAnalysis(
   sessionId: string,
   profile: CareerProfile,
-  trackId?: string | null,
+  trackId?: string,
 ): Promise<AnalysisResult> {
   return request<AnalysisResult>('/analyze', {
     method: 'POST',
-    body: JSON.stringify({ sessionId, profile, trackId: trackId ?? null }),
+    body: JSON.stringify({ sessionId, profile, trackId }),
   });
 }
 

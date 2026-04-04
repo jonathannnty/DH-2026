@@ -67,9 +67,7 @@ class ResearchAgent:
         self.progress = 0
         
         try:
-            # Simulate research phases with small delays so polling can detect transition
-            await asyncio.sleep(0.5)  # Simulate work
-            
+            # Simulate research phases
             research_results = {
                 "interests": context.profile.get("interests", []),
                 "trending_fields": [
@@ -119,9 +117,6 @@ class ProfileAnalysisAgent:
         self.progress = 0
         
         try:
-            # Simulate analysis work
-            await asyncio.sleep(0.4)
-            
             profile = context.profile
             
             # Analyze different dimensions
@@ -184,9 +179,6 @@ class RecommendationAgent:
         self.progress = 0
         
         try:
-            # Simulate recommendation generation
-            await asyncio.sleep(0.4)
-            
             profile = context.profile
             interests = profile.get("interests", [])
             values = profile.get("values", [])
@@ -269,9 +261,6 @@ class VerificationAgent:
         self.progress = 0
         
         try:
-            # Simulate verification work
-            await asyncio.sleep(0.3)
-            
             # Verify various aspects
             verification_results = {
                 "profile_completeness": {
@@ -327,9 +316,6 @@ class ReportGenerationAgent:
         self.progress = 0
         
         try:
-            # Simulate report generation
-            await asyncio.sleep(0.3)
-            
             report = {
                 "report_id": context.sessionId,
                 "generated_at": datetime.now().isoformat(),
