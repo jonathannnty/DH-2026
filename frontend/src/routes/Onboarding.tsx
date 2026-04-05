@@ -4,6 +4,13 @@ import { getSession, sendMessage, triggerAnalysis } from "@/lib/api";
 import { ApiError } from "@/lib/api";
 import type { ChatMessage, CareerProfile } from "@/schemas/career";
 import { useTrack } from "@/hooks/useTrack";
+import QuickChoiceTray from "@/components/ui/QuickChoiceTray";
+import {
+  canPerformUiAction,
+  deriveOnboardingStateContract,
+  deriveOnboardingQuickChoiceState,
+  toggleDraftChoiceValue,
+} from "@/types/uiStateContract";
 
 // ─── Styles ───────────────────────────────────────────────────────
 
@@ -29,7 +36,7 @@ const msgsContainer: React.CSSProperties = {
 const bubbleBase: React.CSSProperties = {
   maxWidth: "85%",
   padding: "12px 16px",
-  borderRadius: "var(--radius)",
+  borderRadius: "var(--pf-radius-md)",
   fontSize: "0.95rem",
   lineHeight: 1.5,
 };
@@ -38,26 +45,28 @@ const inputBar: React.CSSProperties = {
   display: "flex",
   gap: 10,
   padding: "16px 0",
-  borderTop: "1px solid var(--border)",
+  borderTop: "1px solid var(--pf-surface-card-border)",
 };
 
 const inputStyle: React.CSSProperties = {
   flex: 1,
   padding: "12px 16px",
-  background: "var(--bg-input)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius)",
-  color: "var(--text)",
+  background: "var(--pf-color-bg-subtle)",
+  border: "1px solid var(--pf-color-border-subtle)",
+  borderRadius: "var(--pf-radius-md)",
+  color: "var(--pf-color-text-primary)",
   fontSize: "0.95rem",
   outline: "none",
 };
 
 const sendBtnStyle = (disabled: boolean): React.CSSProperties => ({
   padding: "12px 24px",
-  background: disabled ? "var(--bg-input)" : "var(--accent)",
-  color: disabled ? "var(--text-muted)" : "#fff",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius)",
+  background: disabled
+    ? "var(--pf-btn-secondary-bg)"
+    : "var(--pf-btn-primary-bg)",
+  color: disabled ? "var(--pf-color-text-muted)" : "var(--pf-btn-primary-text)",
+  border: "1px solid var(--pf-btn-secondary-border)",
+  borderRadius: "var(--pf-radius-md)",
   fontWeight: 600,
   fontSize: "0.95rem",
   cursor: disabled ? "not-allowed" : "pointer",
@@ -66,15 +75,15 @@ const sendBtnStyle = (disabled: boolean): React.CSSProperties => ({
 
 const profileBar: React.CSSProperties = {
   padding: "10px 16px",
-  background: "var(--bg-card)",
-  borderRadius: "var(--radius-sm)",
+  background: "var(--pf-surface-card-bg)",
+  borderRadius: "var(--pf-radius-sm)",
   marginBottom: 8,
   display: "flex",
   alignItems: "center",
   gap: 12,
   fontSize: "0.8rem",
-  color: "var(--text-muted)",
-  borderBottom: "1px solid var(--border)",
+  color: "var(--pf-color-text-muted)",
+  borderBottom: "1px solid var(--pf-surface-card-border)",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -90,10 +99,10 @@ function SkeletonBubble({ align }: { align: "left" | "right" }) {
       style={{
         ...bubbleBase,
         alignSelf: align === "right" ? "flex-end" : "flex-start",
-        background: "var(--bg-card)",
+        background: "var(--pf-surface-card-bg)",
         width: align === "right" ? 160 : 280,
         height: 44,
-        borderRadius: "var(--radius)",
+        borderRadius: "var(--pf-radius-md)",
         opacity: 0.5,
         animation: "pulse 1.4s ease-in-out infinite",
       }}
@@ -176,7 +185,27 @@ export default function Onboarding() {
   }, [messages]);
 
   async function handleSend() {
-    if (!input.trim() || !sessionId || sending) return;
+    const onboardingState = deriveOnboardingStateContract({
+      hasSessionParam: Boolean(sessionId),
+      loadState,
+      sending,
+      sendError,
+      analyzing,
+      analyzeError,
+      sessionStatus,
+      intakeComplete,
+      profileFieldCount: filledCount(profile),
+      messageCount: messages.length,
+    });
+
+    if (
+      !input.trim() ||
+      !sessionId ||
+      !canPerformUiAction("send-message", { onboarding: onboardingState })
+    ) {
+      return;
+    }
+
     const text = input.trim();
     setInput("");
     setSending(true);
@@ -213,9 +242,24 @@ export default function Onboarding() {
   }
 
   async function handleAnalyze() {
+    const onboardingState = deriveOnboardingStateContract({
+      hasSessionParam: Boolean(sessionId),
+      loadState,
+      sending,
+      sendError,
+      analyzing,
+      analyzeError,
+      sessionStatus,
+      intakeComplete,
+      profileFieldCount: filledCount(profile),
+      messageCount: messages.length,
+    });
+
     if (!sessionId) return;
 
-    if (sessionStatus !== "intake") {
+    if (
+      !canPerformUiAction("trigger-analysis", { onboarding: onboardingState })
+    ) {
       setAnalyzeError(
         "This session is no longer ready to analyze. Start a new assessment.",
       );
@@ -246,6 +290,33 @@ export default function Onboarding() {
     }
   }
 
+  const onboardingState = deriveOnboardingStateContract({
+    hasSessionParam: Boolean(sessionId),
+    loadState,
+    sending,
+    sendError,
+    analyzing,
+    analyzeError,
+    sessionStatus,
+    intakeComplete,
+    profileFieldCount: filledCount(profile),
+    messageCount: messages.length,
+  });
+  const canSendMessage =
+    canPerformUiAction("send-message", { onboarding: onboardingState }) &&
+    input.trim().length > 0;
+  const canTriggerAnalysis = canPerformUiAction("trigger-analysis", {
+    onboarding: onboardingState,
+  });
+  const quickChoiceState = deriveOnboardingQuickChoiceState({
+    assistantMessageCount: messages.filter((m) => m.role === "assistant")
+      .length,
+    sessionStatus,
+    intakeComplete,
+    draftValue: input,
+    trackId,
+  });
+
   // ── No session param ──
   if (!sessionId) {
     return (
@@ -258,8 +329,11 @@ export default function Onboarding() {
           flex: 1,
         }}
       >
-        <p style={{ color: "var(--text-muted)" }}>No session found.</p>
-        <Link to="/" style={{ color: "var(--accent)", fontWeight: 600 }}>
+        <p style={{ color: "var(--pf-color-text-muted)" }}>No session found.</p>
+        <Link
+          to="/"
+          style={{ color: "var(--pf-color-brand-500)", fontWeight: 600 }}
+        >
           Start a new assessment →
         </Link>
       </div>
@@ -267,7 +341,7 @@ export default function Onboarding() {
   }
 
   // ── Loading skeleton ──
-  if (loadState === "loading") {
+  if (onboardingState.loadState === "loading") {
     return (
       <div style={wrap}>
         <style>{`@keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:.25} }`}</style>
@@ -288,7 +362,7 @@ export default function Onboarding() {
   }
 
   // ── Error loading session ──
-  if (loadState === "error") {
+  if (onboardingState.loadState === "error") {
     return (
       <div
         style={{
@@ -302,7 +376,7 @@ export default function Onboarding() {
         <p style={{ fontWeight: 600 }}>Session not found or unavailable.</p>
         <p
           style={{
-            color: "var(--text-muted)",
+            color: "var(--pf-color-text-muted)",
             fontSize: "0.875rem",
             maxWidth: 320,
             textAlign: "center",
@@ -314,9 +388,9 @@ export default function Onboarding() {
           to="/"
           style={{
             padding: "10px 24px",
-            background: "var(--accent)",
-            color: "#fff",
-            borderRadius: "var(--radius)",
+            background: "var(--pf-btn-primary-bg)",
+            color: "var(--pf-btn-primary-text)",
+            borderRadius: "var(--pf-radius-md)",
             fontWeight: 600,
             fontSize: "0.9rem",
           }}
@@ -328,7 +402,7 @@ export default function Onboarding() {
   }
 
   // ── Ready ──
-  if (sessionStatus === "error") {
+  if (onboardingState.analyzeState === "error") {
     return (
       <div
         style={{
@@ -342,7 +416,7 @@ export default function Onboarding() {
         <p style={{ fontWeight: 600 }}>This session cannot be analyzed.</p>
         <p
           style={{
-            color: "var(--text-muted)",
+            color: "var(--pf-color-text-muted)",
             fontSize: "0.875rem",
             maxWidth: 420,
             textAlign: "center",
@@ -355,9 +429,9 @@ export default function Onboarding() {
           to="/"
           style={{
             padding: "10px 24px",
-            background: "var(--accent)",
-            color: "#fff",
-            borderRadius: "var(--radius)",
+            background: "var(--pf-btn-primary-bg)",
+            color: "var(--pf-btn-primary-text)",
+            borderRadius: "var(--pf-radius-md)",
             fontWeight: 600,
             fontSize: "0.9rem",
           }}
@@ -382,8 +456,8 @@ export default function Onboarding() {
               borderRadius: 12,
               fontSize: "0.72rem",
               fontWeight: 700,
-              color: track.color ?? "var(--accent)",
-              border: `1px solid ${track.color ?? "var(--accent)"}`,
+              color: track.color ?? "var(--pf-color-brand-500)",
+              border: `1px solid ${track.color ?? "var(--pf-color-brand-500)"}`,
               whiteSpace: "nowrap",
               textTransform: "uppercase",
               letterSpacing: "0.04em",
@@ -397,7 +471,7 @@ export default function Onboarding() {
           style={{
             flex: 1,
             height: 5,
-            background: "var(--bg-input)",
+            background: "var(--pf-color-bg-subtle)",
             borderRadius: 3,
             overflow: "hidden",
           }}
@@ -406,7 +480,9 @@ export default function Onboarding() {
             style={{
               width: `${Math.round((filled / 12) * 100)}%`,
               height: "100%",
-              background: intakeComplete ? "var(--success)" : "var(--accent)",
+              background: intakeComplete
+                ? "var(--pf-color-success-500)"
+                : "var(--pf-color-brand-500)",
               transition: "width 0.3s",
               borderRadius: 3,
             }}
@@ -415,7 +491,7 @@ export default function Onboarding() {
         {intakeComplete && (
           <span
             style={{
-              color: "var(--success)",
+              color: "var(--pf-color-success-500)",
               fontWeight: 600,
               whiteSpace: "nowrap",
             }}
@@ -433,10 +509,17 @@ export default function Onboarding() {
               ...bubbleBase,
               alignSelf: m.role === "user" ? "flex-end" : "flex-start",
               background:
-                m.role === "user" ? "var(--accent)" : "var(--bg-card)",
-              color: m.role === "user" ? "#fff" : "var(--text)",
+                m.role === "user"
+                  ? "var(--pf-btn-primary-bg)"
+                  : "var(--pf-surface-card-bg)",
+              color:
+                m.role === "user"
+                  ? "var(--pf-btn-primary-text)"
+                  : "var(--pf-color-text-primary)",
               border:
-                m.role === "assistant" ? "1px solid var(--border)" : "none",
+                m.role === "assistant"
+                  ? "1px solid var(--pf-surface-card-border)"
+                  : "none",
             }}
           >
             {m.content}
@@ -448,9 +531,9 @@ export default function Onboarding() {
             style={{
               ...bubbleBase,
               alignSelf: "flex-start",
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              color: "var(--text-muted)",
+              background: "var(--pf-surface-card-bg)",
+              border: "1px solid var(--pf-surface-card-border)",
+              color: "var(--pf-color-text-muted)",
               opacity: 0.6,
               fontSize: "0.85rem",
             }}
@@ -462,23 +545,31 @@ export default function Onboarding() {
         <div ref={bottomRef} />
       </div>
 
-      {sendError && (
+      <QuickChoiceTray
+        state={quickChoiceState}
+        onToggleValue={(value) => {
+          setInput((prev) => toggleDraftChoiceValue(prev, value));
+        }}
+        onClear={() => setInput("")}
+      />
+
+      {onboardingState.sendError && (
         <div
           style={{
             padding: "8px 14px",
             background: "rgba(239,68,68,0.1)",
-            border: "1px solid var(--danger)",
-            borderRadius: "var(--radius-sm)",
-            color: "var(--danger)",
+            border: "1px solid var(--pf-color-danger-500)",
+            borderRadius: "var(--pf-radius-sm)",
+            color: "var(--pf-color-danger-500)",
             fontSize: "0.825rem",
             marginBottom: 8,
           }}
         >
-          {sendError}
+          {onboardingState.sendError}
         </div>
       )}
 
-      {intakeComplete ? (
+      {onboardingState.analyzeState !== "hidden" ? (
         <div
           style={{
             ...inputBar,
@@ -488,7 +579,12 @@ export default function Onboarding() {
             paddingBottom: 24,
           }}
         >
-          <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
+          <p
+            style={{
+              color: "var(--pf-color-text-muted)",
+              fontSize: "0.875rem",
+            }}
+          >
             Your profile is complete. Ready to see your career matches?
           </p>
           <button
@@ -497,21 +593,32 @@ export default function Onboarding() {
               fontSize: "1.05rem",
               fontWeight: 700,
               color: "#fff",
-              background: analyzing ? "var(--bg-card)" : "var(--success)",
-              border: analyzing ? "1px solid var(--border)" : "none",
-              borderRadius: "var(--radius)",
-              cursor: analyzing ? "not-allowed" : "pointer",
-              opacity: analyzing ? 0.7 : 1,
+              background: canTriggerAnalysis
+                ? "var(--pf-btn-success-bg)"
+                : "var(--pf-btn-secondary-bg)",
+              border: canTriggerAnalysis
+                ? "none"
+                : "1px solid var(--pf-btn-secondary-border)",
+              borderRadius: "var(--pf-radius-md)",
+              cursor: canTriggerAnalysis ? "pointer" : "not-allowed",
+              opacity: canTriggerAnalysis ? 1 : 0.7,
               transition: "background 0.2s",
             }}
             onClick={handleAnalyze}
-            disabled={analyzing}
+            disabled={!canTriggerAnalysis}
           >
-            {analyzing ? "Launching Analysis…" : "Analyze My Career Profile"}
+            {onboardingState.analyzeState === "running"
+              ? "Launching Analysis..."
+              : "Analyze My Career Profile"}
           </button>
-          {analyzeError && (
-            <p style={{ color: "var(--danger)", fontSize: "0.825rem" }}>
-              {analyzeError}
+          {onboardingState.analyzeError && (
+            <p
+              style={{
+                color: "var(--pf-color-danger-500)",
+                fontSize: "0.825rem",
+              }}
+            >
+              {onboardingState.analyzeError}
             </p>
           )}
         </div>
@@ -522,14 +629,18 @@ export default function Onboarding() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={sending ? "" : "Type your answer and press Enter…"}
-            disabled={sending}
+            placeholder={sending ? "" : "Type your answer and press Enter..."}
+            disabled={
+              !canPerformUiAction("send-message", {
+                onboarding: onboardingState,
+              })
+            }
             autoFocus
           />
           <button
-            style={sendBtnStyle(sending || !input.trim())}
+            style={sendBtnStyle(!canSendMessage)}
             onClick={handleSend}
-            disabled={sending || !input.trim()}
+            disabled={!canSendMessage}
           >
             Send
           </button>
