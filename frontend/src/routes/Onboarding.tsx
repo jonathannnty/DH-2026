@@ -172,12 +172,8 @@ export default function Onboarding() {
         setProfile(s.profile);
         setTrackId(s.trackId ?? routeTrack);
 
-        // Detect if session was previously completed through intake
-        const lastMsg = s.messages[s.messages.length - 1];
-        if (
-          s.status === "intake" &&
-          lastMsg?.content.includes("profile is ready for analysis")
-        ) {
+        // intakeComplete is now a deterministic field from the API — no phrase-matching.
+        if (s.intakeComplete) {
           setIntakeComplete(true);
         }
 
@@ -232,7 +228,7 @@ export default function Onboarding() {
       ]);
       setProfile((prev) => ({ ...prev, ...res.profileUpdate }));
 
-      if (res.message.content.includes("profile is ready for analysis")) {
+      if (res.intakeComplete) {
         setIntakeComplete(true);
       }
     } catch (err) {
@@ -557,13 +553,15 @@ export default function Onboarding() {
         <div ref={bottomRef} />
       </div>
 
-      <QuickChoiceTray
-        state={quickChoiceState}
-        onToggleValue={(value) => {
-          setInput((prev) => toggleDraftChoiceValue(prev, value));
-        }}
-        onClear={() => setInput("")}
-      />
+      {quickChoiceState.visible && (
+        <QuickChoiceTray
+          state={quickChoiceState}
+          onToggleValue={(value) => {
+            setInput((prev) => toggleDraftChoiceValue(prev, value));
+          }}
+          onClear={() => setInput("")}
+        />
+      )}
 
       {onboardingState.sendError && (
         <div

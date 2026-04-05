@@ -86,6 +86,7 @@ export const SessionResponseSchema = z.object({
   profile: CareerProfileSchema,
   messages: z.array(ChatMessageSchema),
   recommendations: z.array(CareerRecommendationSchema).optional(),
+  intakeComplete: z.boolean().default(false),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -95,6 +96,7 @@ export type SessionResponse = z.infer<typeof SessionResponseSchema>;
 export const SendMessageResponseSchema = z.object({
   message: ChatMessageSchema,
   profileUpdate: CareerProfileSchema.partial(),
+  intakeComplete: z.boolean(),
 });
 
 export type SendMessageResponse = z.infer<typeof SendMessageResponseSchema>;
