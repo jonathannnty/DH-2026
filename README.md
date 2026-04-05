@@ -43,17 +43,11 @@ npm run test
 npm run lint
 ```
 
-## Demo Quick Start (Windows PowerShell)
+## Demo Quick Start
 
-```powershell
-# Terminal 1
-python agent_service.py
+👉 **[Start here: QUICKSTART.md](QUICKSTART.md)** — 5-minute setup for any platform.
 
-# Terminal 2
-.\demo-startup.ps1 -Scenario swe
-```
-
-This starts API + frontend, seeds a fake profile session, and opens the browser to a preloaded onboarding flow.
+For emergency recovery and advanced operator workflows, see `docs/operator-playbook.md`.
 
 ## Testing
 

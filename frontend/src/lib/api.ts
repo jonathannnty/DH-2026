@@ -11,6 +11,17 @@ import {
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
+// Unique correlation ID per session (generated once at app startup or on new session)
+let currentCorrelationId = crypto.randomUUID();
+
+export function setCorrelationId(id: string): void {
+  currentCorrelationId = id;
+}
+
+export function getCorrelationId(): string {
+  return currentCorrelationId;
+}
+
 class ApiError extends Error {
   constructor(
     public status: number,
@@ -27,10 +38,20 @@ async function request(path: string, options?: RequestInit): Promise<unknown> {
     headers.set("Content-Type", "application/json");
   }
 
+  // Propagate correlation ID to backend
+  headers.set("X-Correlation-Id", currentCorrelationId);
+
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers,
   });
+
+  // Extract and update correlation ID from response
+  const responseCorrelationId = res.headers.get("X-Correlation-Id");
+  if (responseCorrelationId) {
+    currentCorrelationId = responseCorrelationId;
+  }
+
   if (!res.ok) {
     const body = await res.text();
     throw new ApiError(res.status, body);

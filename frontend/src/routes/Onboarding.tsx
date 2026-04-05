@@ -56,16 +56,18 @@ const inputBar: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   flex: 1,
   padding: "12px 16px",
+  minHeight: "44px",
   background: "var(--pf-color-bg-subtle)",
   border: "1px solid var(--pf-color-border-subtle)",
   borderRadius: "var(--pf-radius-md)",
   color: "var(--pf-color-text-primary)",
-  fontSize: "0.95rem",
+  fontSize: "max(0.95rem, 16px)",
   outline: "none",
 };
 
 const sendBtnStyle = (disabled: boolean): React.CSSProperties => ({
   padding: "12px 24px",
+  minHeight: "44px",
   background: disabled
     ? "var(--pf-btn-secondary-bg)"
     : "var(--pf-btn-primary-bg)",
@@ -73,7 +75,7 @@ const sendBtnStyle = (disabled: boolean): React.CSSProperties => ({
   border: "1px solid var(--pf-btn-secondary-border)",
   borderRadius: "var(--pf-radius-md)",
   fontWeight: 600,
-  fontSize: "0.95rem",
+  fontSize: "max(0.95rem, 16px)",
   cursor: disabled ? "not-allowed" : "pointer",
   transition: "background 0.15s",
 });
@@ -638,14 +640,40 @@ export default function Onboarding() {
             paddingBottom: 24,
           }}
         >
-          <p
-            style={{
-              color: "var(--pf-color-text-muted)",
-              fontSize: "0.875rem",
-            }}
-          >
-            Your profile is complete. Ready to see your career matches?
-          </p>
+          {onboardingState.profileFieldCount < 3 ? (
+            <>
+              <p
+                style={{
+                  color: "var(--pf-color-warning-500)",
+                  fontSize: "0.875rem",
+                  fontWeight: 500,
+                }}
+              >
+                ⚠ Your profile needs more detail
+              </p>
+              <p
+                style={{
+                  color: "var(--pf-color-text-muted)",
+                  fontSize: "0.8rem",
+                }}
+              >
+                Let&apos;s add at least {3 - onboardingState.profileFieldCount} more
+                {3 - onboardingState.profileFieldCount === 1
+                  ? " detail"
+                  : " details"}{" "}
+                to give you better matches.
+              </p>
+            </>
+          ) : (
+            <p
+              style={{
+                color: "var(--pf-color-text-muted)",
+                fontSize: "0.875rem",
+              }}
+            >
+              Your profile is complete. Ready to see your career matches?
+            </p>
+          )}
           <button
             style={{
               padding: "14px 40px",
@@ -665,6 +693,11 @@ export default function Onboarding() {
             }}
             onClick={handleAnalyze}
             disabled={!canTriggerAnalysis}
+            title={
+              !canTriggerAnalysis
+                ? "Please add more details to your profile before analyzing"
+                : ""
+            }
           >
             {onboardingState.analyzeState === "running"
               ? "Launching Analysis..."

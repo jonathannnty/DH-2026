@@ -10,7 +10,9 @@
     "dev": "concurrently -n frontend,api -c green,blue \"npm run dev --workspace frontend\" \"npm run dev --workspace api\"",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "demo:pass": "bash demo-pass.sh",
+    "smoke": "bash smoke.sh"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

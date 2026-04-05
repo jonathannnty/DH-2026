@@ -1357,10 +1357,14 @@ export const ACTION_RULES: Record<
   "trigger-analysis": (state) => {
     const s = state.onboarding;
     if (!s) return false;
+    // Require minimum profile quality: at least 3 fields filled
+    // This reduces downstream instability and fallback activation
+    const hasMinimumProfile = s.profileFieldCount >= 3;
     return (
       s.loadState === "ready" &&
       s.analyzeState === "enabled" &&
-      s.sessionStatus === "intake"
+      s.sessionStatus === "intake" &&
+      hasMinimumProfile
     );
   },
   "retry-analysis": (state) => {
