@@ -236,22 +236,22 @@ export const SESSION_STATUS_DISPLAY: Record<
 > = {
   intake: {
     label: "Intake",
-    color: "#64748B",
+    color: "var(--pf-color-text-muted)",
     actionLabel: "Continue intake",
   },
   analyzing: {
     label: "Analyzing",
-    color: "#06B6D4",
+    color: "var(--pf-color-brand-400)",
     actionLabel: "View analysis",
   },
   complete: {
     label: "Complete",
-    color: "#10B981",
+    color: "var(--pf-color-success-500)",
     actionLabel: "View results",
   },
   error: {
     label: "Error",
-    color: "#EF4444",
+    color: "var(--pf-color-danger-500)",
     actionLabel: "Review session",
   },
 };

@@ -1,7 +1,15 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { createSession, getTracks } from "@/lib/api";
 import { motion, useReducedMotion } from "framer-motion";
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  GitCompareArrows,
+  LoaderCircle,
+  PencilLine,
+  X,
+} from "lucide-react";
 import type { SessionStatus, SponsorTrack } from "@/schemas/career";
 import {
   canPerformUiAction,
@@ -9,6 +17,7 @@ import {
   getSessionDestination,
   getSessionStatusDisplay,
 } from "@/types/uiStateContract";
+import { IconLabel } from "@/components/ui/IconLabel";
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -39,13 +48,25 @@ const newBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 
+function getSessionActionIcon(status: SessionStatus) {
+  if (status === "intake") return PencilLine;
+  if (status === "analyzing") return LoaderCircle;
+  if (status === "error") return AlertTriangle;
+  return ArrowUpRight;
+}
+
 export default function Dashboard() {
   const reduceMotion = useReducedMotion();
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [tracks, setTracks] = useState<Map<string, SponsorTrack>>(new Map());
   const [loading, setLoading] = useState(true);
   const [newLoading, setNewLoading] = useState(false);
+  // Compare mode: holds the first session ID the user picked for comparison
+  const [compareAId, setCompareAId] = useState<string | null>(
+    searchParams.get("compare") ?? null,
+  );
 
   const dashboardSessions = sessions.map((s) => ({
     id: s.id,
@@ -157,6 +178,33 @@ export default function Dashboard() {
         </button>
       </div>
 
+      {/* Compare mode banner */}
+      {compareAId && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          padding: "10px 16px",
+          marginBottom: 16,
+          background: "color-mix(in srgb, var(--pf-color-brand-500) 8%, transparent)",
+          border: "1px solid color-mix(in srgb, var(--pf-color-brand-500) 25%, transparent)",
+          borderRadius: "var(--pf-radius-md)",
+          fontSize: "0.85rem",
+        }}>
+          <IconLabel icon={GitCompareArrows} variant="compact" style={{ color: "var(--pf-color-brand-400)", fontWeight: 600 }}>
+            Select a second completed session to compare
+          </IconLabel>
+          <button
+            onClick={() => setCompareAId(null)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--pf-color-text-muted)", display: "flex", alignItems: "center", padding: 4 }}
+            aria-label="Cancel comparison"
+          >
+            <X size={14} strokeWidth={2} />
+          </button>
+        </div>
+      )}
+
       {dashboardState.loadState === "loading" && (
         <div
           style={{
@@ -199,102 +247,162 @@ export default function Dashboard() {
         const t = s.trackId ? tracks.get(s.trackId) : null;
         const statusDisplay = getSessionStatusDisplay(s.status);
         const color = statusDisplay.color;
+        const ActionIcon = getSessionActionIcon(s.status);
 
         const linkTarget = canOpenSession
           ? getSessionDestination(s.id, s.status)
           : "/dashboard";
 
+        const isSelected = compareAId === s.id;
+        const canBeComparedWith =
+          compareAId !== null && compareAId !== s.id && s.status === "complete";
+        const canStartCompare = compareAId === null && s.status === "complete";
+
         return (
-          <Link
+          <motion.div
             key={s.id}
-            to={linkTarget}
-            style={{ textDecoration: "none", color: "inherit" }}
+            initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+            animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+            transition={
+              reduceMotion
+                ? undefined
+                : {
+                    duration: 0.18,
+                    ease: "easeOut",
+                    delay: 0.03 * sessions.indexOf(s),
+                  }
+            }
+            whileHover={reduceMotion ? undefined : { y: -2, scale: 1.004 }}
+            whileTap={reduceMotion ? undefined : { y: 1, scale: 0.998 }}
+            onClick={() => canOpenSession && nav(linkTarget)}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "16px 20px",
+              background: "var(--pf-surface-card-bg)",
+              border: isSelected
+                ? "1px solid var(--pf-color-brand-400)"
+                : "1px solid var(--pf-surface-card-border)",
+              borderRadius: "var(--pf-radius-md)",
+              marginBottom: 10,
+              transition: "border-color 0.15s, box-shadow 0.15s",
+              cursor: canOpenSession ? "pointer" : "default",
+            }}
           >
-            <motion.div
-              initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-              animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-              transition={
-                reduceMotion
-                  ? undefined
-                  : {
-                      duration: 0.18,
-                      ease: "easeOut",
-                      delay: 0.03 * sessions.indexOf(s),
-                    }
-              }
-              whileHover={reduceMotion ? undefined : { y: -2, scale: 1.004 }}
-              whileTap={reduceMotion ? undefined : { y: 1, scale: 0.998 }}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "16px 20px",
-                background: "var(--pf-surface-card-bg)",
-                border: "1px solid var(--pf-surface-card-border)",
-                borderRadius: "var(--pf-radius-md)",
-                marginBottom: 10,
-                transition: "border-color 0.15s, box-shadow 0.15s",
-              }}
-            >
-              <div>
-                <div
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 4,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    marginBottom: 4,
-                    flexWrap: "wrap",
+                    fontWeight: 600,
+                    fontSize: "0.9rem",
+                    fontFamily: "var(--pf-font-family-mono)",
                   }}
                 >
-                  <span
-                    style={{
-                      fontWeight: 600,
-                      fontSize: "0.9rem",
-                      fontFamily: "var(--pf-font-family-mono)",
-                    }}
-                  >
-                    {s.id.slice(0, 8)}
-                  </span>
+                  {s.id.slice(0, 8)}
+                </span>
+                <span
+                  style={{
+                    padding: "2px 8px",
+                    borderRadius: 10,
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    color,
+                    border: `1px solid ${color}`,
+                  }}
+                >
+                  {statusDisplay.label}
+                </span>
+                {t && t.id !== "general" && (
                   <span
                     style={{
                       padding: "2px 8px",
                       borderRadius: 10,
                       fontSize: "0.72rem",
                       fontWeight: 600,
-                      color,
-                      border: `1px solid ${color}`,
+                      color: t.color ?? "var(--pf-color-brand-500)",
+                      border: `1px solid ${t.color ?? "var(--pf-color-brand-500)"}`,
                     }}
                   >
-                    {statusDisplay.label}
+                    {t.name}
                   </span>
-                  {t && t.id !== "general" && (
-                    <span
-                      style={{
-                        padding: "2px 8px",
-                        borderRadius: 10,
-                        fontSize: "0.72rem",
-                        fontWeight: 600,
-                        color: t.color ?? "var(--pf-color-brand-500)",
-                        border: `1px solid ${t.color ?? "var(--pf-color-brand-500)"}`,
-                      }}
-                    >
-                      {t.name}
-                    </span>
-                  )}
-                </div>
-                <div
+                )}
+              </div>
+              <div
+                style={{
+                  fontSize: "0.78rem",
+                  color: "var(--pf-color-text-muted)",
+                }}
+              >
+                {s.messageCount} message{s.messageCount !== 1 ? "s" : ""}
+                {" · "}
+                {relativeTime(s.updatedAt)}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {isSelected && (
+                <span style={{
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                  color: "var(--pf-color-brand-400)",
+                  padding: "3px 10px",
+                  border: "1px solid var(--pf-color-brand-400)",
+                  borderRadius: "var(--pf-radius-pill)",
+                  whiteSpace: "nowrap",
+                }}>
+                  Selected
+                </span>
+              )}
+              {canBeComparedWith && (
+                <Link
+                  to={`/compare?a=${compareAId}&b=${s.id}`}
+                  onClick={(e) => e.stopPropagation()}
                   style={{
-                    fontSize: "0.78rem",
-                    color: "var(--pf-color-text-muted)",
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    color: "var(--pf-color-brand-400)",
+                    padding: "3px 10px",
+                    border: "1px solid var(--pf-color-brand-400)",
+                    borderRadius: "var(--pf-radius-pill)",
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  {s.messageCount} message{s.messageCount !== 1 ? "s" : ""}
-                  {" · "}
-                  {relativeTime(s.updatedAt)}
-                </div>
-              </div>
-
-              <span
+                  <IconLabel icon={GitCompareArrows} variant="compact">
+                    Compare with this
+                  </IconLabel>
+                </Link>
+              )}
+              {canStartCompare && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setCompareAId(s.id); }}
+                  style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    color: "var(--pf-color-text-muted)",
+                    padding: "3px 10px",
+                    border: "1px solid var(--pf-surface-card-border)",
+                    borderRadius: "var(--pf-radius-pill)",
+                    background: "none",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Compare
+                </button>
+              )}
+              <IconLabel
+                icon={ActionIcon}
+                variant="action"
                 style={{
                   fontSize: "0.85rem",
                   color: "var(--pf-color-brand-500)",
@@ -303,9 +411,9 @@ export default function Dashboard() {
                 }}
               >
                 {statusDisplay.actionLabel}
-              </span>
-            </motion.div>
-          </Link>
+              </IconLabel>
+            </div>
+          </motion.div>
         );
       })}
     </motion.div>

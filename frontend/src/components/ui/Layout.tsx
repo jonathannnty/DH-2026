@@ -1,6 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { House, LayoutDashboard, MoonStar, Sun } from "lucide-react";
+import { IconLabel } from "@/components/ui/IconLabel";
 
 const navStyle: React.CSSProperties = {
   display: "flex",
@@ -46,7 +48,8 @@ const indicatorStyle: React.CSSProperties = {
   borderRadius: "var(--pf-radius-sm)",
   background:
     "linear-gradient(135deg, rgba(99,102,241,0.16), rgba(129,140,248,0.1))",
-  border: "1px solid rgba(129,140,248,0.28)",
+  border:
+    "1px solid color-mix(in srgb, var(--pf-color-brand-400) 28%, transparent)",
   zIndex: 0,
 };
 
@@ -67,21 +70,96 @@ const linkLabelStyle: React.CSSProperties = {
 };
 
 const navLinks = [
-  { to: "/", label: "Home" },
-  { to: "/dashboard", label: "Sessions" },
+  { to: "/", label: "Home", icon: House },
+  { to: "/dashboard", label: "Sessions", icon: LayoutDashboard },
 ];
+
+type ThemeMode = "dark" | "light";
+
+function getInitialTheme(): ThemeMode {
+  if (typeof document !== "undefined") {
+    const existingTheme = document.documentElement.dataset.theme;
+    if (existingTheme === "dark" || existingTheme === "light") {
+      return existingTheme;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    const storedTheme = window.localStorage.getItem("pf-theme");
+    if (storedTheme === "dark" || storedTheme === "light") {
+      return storedTheme;
+    }
+
+    if (window.matchMedia("(prefers-color-scheme: light)").matches) {
+      return "light";
+    }
+  }
+
+  return "dark";
+}
 
 export default function Layout({ children }: { children: ReactNode }) {
   const reduceMotion = useReducedMotion();
   const { pathname } = useLocation();
   const shellRef = useRef<HTMLDivElement>(null);
+  const previousThemeRef = useRef<ThemeMode | null>(null);
+  const themeTransitionTimerRef = useRef<number | null>(null);
+  const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
 
   const isHome = pathname === "/";
   const isDashboard = pathname === "/dashboard";
 
+  const ambientMood = isHome
+    ? "home"
+    : isDashboard
+      ? "dashboard"
+      : pathname.startsWith("/onboarding")
+        ? "guided"
+        : pathname.startsWith("/results")
+          ? "results"
+          : "default";
+
   const navTransition = reduceMotion
     ? { duration: 0 }
     : { type: "spring" as const, stiffness: 360, damping: 30 };
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const shouldAnimate =
+      previousThemeRef.current !== null &&
+      previousThemeRef.current !== theme &&
+      !reduceMotion;
+
+    if (themeTransitionTimerRef.current !== null) {
+      window.clearTimeout(themeTransitionTimerRef.current);
+      themeTransitionTimerRef.current = null;
+    }
+
+    if (shouldAnimate) {
+      root.classList.add("pf-theme-transition");
+    }
+
+    root.dataset.theme = theme;
+    root.style.colorScheme = theme;
+    window.localStorage.setItem("pf-theme", theme);
+    previousThemeRef.current = theme;
+
+    if (shouldAnimate) {
+      themeTransitionTimerRef.current = window.setTimeout(() => {
+        root.classList.remove("pf-theme-transition");
+        themeTransitionTimerRef.current = null;
+      }, 360);
+    }
+  }, [theme, reduceMotion]);
+
+  useEffect(() => {
+    return () => {
+      if (themeTransitionTimerRef.current !== null) {
+        window.clearTimeout(themeTransitionTimerRef.current);
+      }
+      document.documentElement.classList.remove("pf-theme-transition");
+    };
+  }, []);
 
   useEffect(() => {
     const shell = shellRef.current;
@@ -107,8 +185,12 @@ export default function Layout({ children }: { children: ReactNode }) {
     };
 
     setCursorVars(0, 0, false);
-    window.addEventListener("pointermove", handlePointerMove, { passive: true });
-    window.addEventListener("pointerdown", handlePointerMove, { passive: true });
+    window.addEventListener("pointermove", handlePointerMove, {
+      passive: true,
+    });
+    window.addEventListener("pointerdown", handlePointerMove, {
+      passive: true,
+    });
     window.addEventListener("pointerleave", handlePointerLeave);
     window.addEventListener("blur", handlePointerLeave);
 
@@ -122,13 +204,17 @@ export default function Layout({ children }: { children: ReactNode }) {
   }, [reduceMotion]);
 
   return (
-    <div className="app-shell" ref={shellRef}>
+    <div className="app-shell" ref={shellRef} data-ambient-mood={ambientMood}>
       <div className="ambient-bg" aria-hidden="true">
+        <span className="ambient-beam ambient-beam-a" />
+        <span className="ambient-beam ambient-beam-b" />
         <span className="ambient-orb ambient-orb-a" />
         <span className="ambient-orb ambient-orb-b" />
         <span className="ambient-orb ambient-orb-c" />
+        <span className="ambient-drift-lines" />
         <span className="ambient-cursor" />
         <span className="ambient-grid" />
+        <span className="ambient-grain" />
       </div>
       <nav style={navStyle}>
         <Link to="/" style={logoStyle}>
@@ -136,6 +222,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </Link>
         <div style={navLinksStyle}>
           {navLinks.map((item) => {
+            const Icon = item.icon;
             const active =
               (item.to === "/" && isHome) ||
               (item.to === "/dashboard" && isDashboard);
@@ -156,10 +243,44 @@ export default function Layout({ children }: { children: ReactNode }) {
                     />
                   </>
                 )}
-                <span style={linkLabelStyle}>{item.label}</span>
+                <IconLabel icon={Icon} variant="nav" style={linkLabelStyle}>
+                  {item.label}
+                </IconLabel>
               </Link>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            aria-pressed={theme === "light"}
+            aria-label={
+              theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+            }
+            style={{
+              position: "relative",
+              padding: "6px 14px",
+              borderRadius: "var(--pf-radius-sm)",
+              border: "1px solid var(--pf-surface-card-border)",
+              background: "var(--pf-btn-secondary-bg)",
+              color: "var(--pf-btn-secondary-text)",
+              fontSize: "0.875rem",
+              fontWeight: 600,
+              overflow: "hidden",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            {theme === "dark" ? (
+              <IconLabel icon={Sun} variant="nav">
+                Light mode
+              </IconLabel>
+            ) : (
+              <IconLabel icon={MoonStar} variant="nav">
+                Dark mode
+              </IconLabel>
+            )}
+          </button>
         </div>
       </nav>
       <main

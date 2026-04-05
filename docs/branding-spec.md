@@ -45,6 +45,7 @@ All tokens are implemented in `frontend/src/index.css` and must be consumed thro
 | `--pf-radius-pill`         | `999px`                                | Pills and soft badges             |
 | `--pf-font-family-display` | `"Sora", "Manrope", sans-serif`        | Headlines and high-emphasis text  |
 | `--pf-font-family-base`    | `"Manrope", "Segoe UI", sans-serif`    | Primary UI font family            |
+| `--pf-font-family-accent`  | `"Space Grotesk", "Sora", sans-serif`  | Hero emphasis and editorial beats |
 | `--pf-font-family-mono`    | `"IBM Plex Mono", Consolas, monospace` | Session ids and code/data text    |
 | `--pf-shadow-soft`         | `0 6px 14px rgba(0,0,0,0.2)`           | Hover elevation                   |
 | `--pf-shadow-pressed`      | `0 2px 6px rgba(0,0,0,0.25)`           | Active/pressed elevation          |
@@ -115,6 +116,30 @@ Track colors are applied as accents only, not full-theme overrides.
 | `Panel`   | `elevated` | `--pf-color-bg-surface` | `--pf-color-border-strong` | `--pf-radius-md` | banners and important containers |
 | `Input`   | `default`  | `--pf-color-bg-subtle`  | `--pf-color-border-subtle` | `--pf-radius-md` | Onboarding input row             |
 
+### 5.4 Iconography
+
+Use a single outlined icon family (`lucide-react`) to keep visual rhythm consistent.
+
+All icon + label combinations should use the shared `IconLabel` helper (`frontend/src/components/ui/IconLabel.tsx`).
+
+Variant scale:
+
+| Variant   | Size | Stroke | Usage                            |
+| --------- | ---- | ------ | -------------------------------- |
+| `compact` | 13px | 1.9    | track rows, compact card labels  |
+| `nav`     | 14px | 1.9    | top navigation and theme switch  |
+| `action`  | 14px | 1.9    | Dashboard action labels          |
+| `section` | 14px | 1.9    | Results section and meta headers |
+| `cta`     | 16px | 2.0    | primary call-to-action buttons   |
+
+Rules:
+
+1. Use icons on primary navigation items and high-intent CTAs.
+2. Pair icons with text labels for clarity; avoid icon-only controls unless universally recognized.
+3. Use only the standardized IconLabel variants for icon size and stroke weight.
+4. Use semantic token colors, not hard-coded fills/strokes.
+5. For track cards, map one icon per track so users can identify lanes at a glance.
+
 ## 6. Motion and Accessibility
 
 1. Respect `prefers-reduced-motion`; route and ambient animations must degrade cleanly.
@@ -131,6 +156,44 @@ Rules:
 2. Never use it as the only way to communicate state.
 3. Disable it entirely for reduced motion users.
 4. Render it as a background layer only, never above interactive controls.
+
+## 6.2 Theme Modes
+
+PathFinder AI supports both dark and light themes with the same layout, typography, and component structure.
+
+Rules:
+
+1. Dark mode remains the default brand presentation.
+2. Light mode should reuse the same token names and only swap values.
+3. The theme choice should persist per user and respect the system preference on first load.
+4. Cursor-reactive and ambient layers should be softened in light mode, not removed.
+5. Theme switching should use a short fluid transition (~320ms) for color, border, and icon stroke properties, and must be disabled for reduced motion users.
+
+## 6.3 Home Hero Composition
+
+The Home hero should feel editorial and dynamic while remaining readable and conversion-oriented.
+
+Rules:
+
+1. Use a layered hero panel with at least one low-opacity animated glow behind content.
+2. Use `--pf-font-family-accent` only for emphasis phrases, not full paragraphs.
+3. Keep motion subtle and continuous (slow drift), and disable non-essential loops for reduced motion users.
+4. Present core value props as short signal cards above the primary CTA.
+5. A single hero phrase may rotate words with a soft transition cadence; reduced motion must render a static phrase.
+6. Track cards should drive a hover/focus preview carousel with directional slide animation.
+7. Hero parallax should respond to cursor movement only on desktop breakpoints and reset on pointer leave.
+
+## 6.4 Ambient Mood Profiles
+
+The ambient background system should keep one visual language while tuning intensity per page context.
+
+Rules:
+
+1. Use route-based mood profiles instead of separate background implementations.
+2. Home should feel most energetic (faster drift, stronger opacity).
+3. Dashboard should feel calmer (slower drift, reduced opacity and cursor strength).
+4. Other pages can use intermediate moods (guided/results) that sit between Home and Dashboard.
+5. Reduced motion must disable all mood animation equally across profiles.
 
 ## 7. Implementation Contract
 

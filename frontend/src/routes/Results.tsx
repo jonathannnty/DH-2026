@@ -4,6 +4,13 @@ import { getSession, getRecommendations } from "@/lib/api";
 import { useSessionStream } from "@/hooks/useSessionStream";
 import { useTrack } from "@/hooks/useTrack";
 import { motion, useReducedMotion } from "framer-motion";
+import {
+  ArrowRight,
+  CircleDollarSign,
+  Compass,
+  ShieldAlert,
+  Sparkles,
+} from "lucide-react";
 import type {
   CareerRecommendation,
   SessionResponse,
@@ -13,6 +20,8 @@ import {
   canPerformUiAction,
   deriveResultsStateContract,
 } from "@/types/uiStateContract";
+import { IconLabel } from "@/components/ui/IconLabel";
+import { UI_COPY } from "@/lib/copy";
 
 // ─── Styles ───────────────────────────────────────────────────────
 
@@ -96,8 +105,8 @@ function FallbackBanner() {
         alignItems: "center",
         gap: 10,
         padding: "10px 16px",
-        background: "rgba(245, 158, 11, 0.08)",
-        border: "1px solid rgba(245, 158, 11, 0.3)",
+        background: "color-mix(in srgb, var(--pf-color-warning-500) 8%, transparent)",
+        border: "1px solid color-mix(in srgb, var(--pf-color-warning-500) 30%, transparent)",
         borderRadius: "var(--pf-radius-md)",
         marginBottom: 16,
         fontSize: "0.82rem",
@@ -111,11 +120,10 @@ function FallbackBanner() {
           letterSpacing: "0.05em",
         }}
       >
-        Personalised Fallback Mode
+        {UI_COPY.fallback.modeBadge}
       </span>
       <span style={{ color: "var(--pf-color-text-muted)", fontWeight: 400 }}>
-        — Live analysis timed out. These recommendations are derived from your
-        profile using our offline engine.
+        — {UI_COPY.fallback.modeDescription}
       </span>
     </div>
   );
@@ -528,18 +536,22 @@ export default function Results() {
                 marginBottom: 16,
               }}
             >
-              <span
+              <IconLabel
+                icon={CircleDollarSign}
+                variant="section"
                 style={{ color: "var(--pf-color-text-muted)", fontWeight: 400 }}
               >
                 Salary
-              </span>
+              </IconLabel>
               ${rec.salaryRange.low.toLocaleString()} – $
               {rec.salaryRange.high.toLocaleString()} USD
             </div>
           )}
 
           <div style={{ marginBottom: 14 }}>
-            <div
+            <IconLabel
+              icon={Sparkles}
+              variant="section"
               style={{
                 fontWeight: 600,
                 fontSize: "0.8rem",
@@ -550,7 +562,7 @@ export default function Results() {
               }}
             >
               Why it fits
-            </div>
+            </IconLabel>
             <div style={pillList}>
               {rec.reasons.map((r, j) => (
                 <span key={j} style={pill}>
@@ -562,7 +574,9 @@ export default function Results() {
 
           {rec.concerns.length > 0 && (
             <div style={{ marginBottom: 14 }}>
-              <div
+              <IconLabel
+                icon={ShieldAlert}
+                variant="section"
                 style={{
                   fontWeight: 600,
                   fontSize: "0.8rem",
@@ -573,7 +587,7 @@ export default function Results() {
                 }}
               >
                 Watch out for
-              </div>
+              </IconLabel>
               <div style={pillList}>
                 {rec.concerns.map((c, j) => (
                   <span key={j} style={pill}>
@@ -585,7 +599,9 @@ export default function Results() {
           )}
 
           <div>
-            <div
+            <IconLabel
+              icon={Compass}
+              variant="section"
               style={{
                 fontWeight: 600,
                 fontSize: "0.8rem",
@@ -596,7 +612,7 @@ export default function Results() {
               }}
             >
               Next steps
-            </div>
+            </IconLabel>
             <ol
               style={{
                 paddingLeft: 20,
@@ -628,15 +644,20 @@ export default function Results() {
           style={{
             padding: "12px 28px",
             background: "var(--pf-btn-primary-bg)",
-            color: "#fff",
+            color: "var(--pf-btn-primary-text)",
             border: "none",
             borderRadius: "var(--pf-radius-md)",
             fontWeight: 600,
             cursor: "pointer",
             fontSize: "0.9rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
           }}
         >
-          Start new assessment
+          <IconLabel icon={ArrowRight} variant="cta">
+            Start new assessment
+          </IconLabel>
         </button>
         <Link
           to="/dashboard"

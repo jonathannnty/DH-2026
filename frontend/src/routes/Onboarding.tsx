@@ -557,7 +557,7 @@ export default function Onboarding() {
         <div
           style={{
             padding: "8px 14px",
-            background: "rgba(239,68,68,0.1)",
+            background: "color-mix(in srgb, var(--pf-color-danger-500) 10%, transparent)",
             border: "1px solid var(--pf-color-danger-500)",
             borderRadius: "var(--pf-radius-sm)",
             color: "var(--pf-color-danger-500)",
@@ -592,7 +592,7 @@ export default function Onboarding() {
               padding: "14px 40px",
               fontSize: "1.05rem",
               fontWeight: 700,
-              color: "#fff",
+              color: "var(--pf-btn-primary-text)",
               background: canTriggerAnalysis
                 ? "var(--pf-btn-success-bg)"
                 : "var(--pf-btn-secondary-bg)",
