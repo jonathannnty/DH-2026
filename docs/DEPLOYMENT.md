@@ -48,6 +48,19 @@ The frontend automatically reads `VITE_API_URL` from environment variables. If n
 
 ## API Deployment (Vercel / Custom Node.js)
 
+### Vercel Import Settings (Monorepo)
+
+If you deploy only the API package from this monorepo, use these values in Vercel:
+
+- Root Directory: `api`
+- Install Command: `npm install`
+- Build Command: `npm run build`
+- Output Directory: `N/A`
+
+Optional explicit Runtime command (if your Vercel project asks for it):
+
+- Start Command: `npm run start`
+
 ### Environment Variables
 
 **Required (all deployments):**
@@ -58,6 +71,8 @@ NODE_ENV=production
 DATABASE_URL=/path/to/production.db (or remote DB URL)
 DEMO_MODE=false
 ```
+
+Do not set frontend-only variables (`VITE_API_URL`, `VITE_AGENT_URL`) on the API project.
 
 **Optional (falling back gracefully if not set):**
 
