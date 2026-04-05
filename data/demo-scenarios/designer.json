@@ -1,0 +1,24 @@
+{
+  "id": "designer-scenario",
+  "name": "UX Designer Profile",
+  "description": "Design-focused professional passionate about user research and product experience",
+  "profile": {
+    "interests": "user experience, product design, psychology, accessibility, typography",
+    "values": "user empathy, collaboration, continuous improvement, learning",
+    "workingStyle": "collaborative with structured ideation sessions, user-centered research",
+    "hardSkills": "Figma, prototyping, user research, design systems, HTML/CSS basics",
+    "softSkills": "communication, stakeholder management, creative problem-solving, presentation",
+    "riskTolerance": "low-medium — prefers stable growth",
+    "salaryExpectations": {
+      "minimum": 65000,
+      "target": 110000,
+      "currency": "USD"
+    },
+    "geographicPreference": "flexible — hybrid or office in tech hubs",
+    "education": "Bachelor's in Design or related field",
+    "timeline": "medium term — within 1 year",
+    "purposePriorities": "creating delightful user experiences, advocating for users, building design systems",
+    "burnoutConcerns": "ignoring user feedback, design-by-committee, unrealistic project timelines"
+  },
+  "estimatedAnalysisTime": "40 seconds"
+}

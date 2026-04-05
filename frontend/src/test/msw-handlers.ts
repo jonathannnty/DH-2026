@@ -1,13 +1,13 @@
-import { http, HttpResponse } from 'msw';
+import { http, HttpResponse } from "msw";
 import {
   TRACK_GENERAL,
   TRACK_TECH,
   SESSION_INTAKE,
   SESSION_COMPLETE,
   RECOMMENDATIONS,
-} from './fixtures';
+} from "./fixtures";
 
-const BASE = 'http://localhost:3001';
+const BASE = "http://localhost:3001";
 
 export const defaultHandlers = [
   // Tracks
@@ -16,7 +16,9 @@ export const defaultHandlers = [
   ),
 
   http.get(`${BASE}/tracks/:trackId`, ({ params }) => {
-    const track = [TRACK_GENERAL, TRACK_TECH].find((t) => t.id === params.trackId);
+    const track = [TRACK_GENERAL, TRACK_TECH].find(
+      (t) => t.id === params.trackId,
+    );
     if (!track) return new HttpResponse(null, { status: 404 });
     return HttpResponse.json(track);
   }),
@@ -38,12 +40,12 @@ export const defaultHandlers = [
   http.post(`${BASE}/sessions/:id/messages`, () =>
     HttpResponse.json({
       message: {
-        id: 'msg-reply',
-        role: 'assistant',
+        id: "msg-reply",
+        role: "assistant",
         content: "Thanks! What are your core values?",
         timestamp: new Date().toISOString(),
       },
-      profileUpdate: { interests: ['technology'] },
+      profileUpdate: { interests: ["technology"] },
       intakeComplete: false,
     }),
   ),
@@ -51,6 +53,15 @@ export const defaultHandlers = [
   // Analyze
   http.post(`${BASE}/sessions/:id/analyze`, () =>
     HttpResponse.json({ ok: true }),
+  ),
+
+  // Agent research prefetch (called directly from frontend)
+  http.post("http://localhost:8000/research", () =>
+    HttpResponse.json({
+      topRoles: ["Software Engineer"],
+      marketInsights: "Stable demand for software roles in 2026.",
+      companies: ["Example Corp"],
+    }),
   ),
 
   // Recommendations
@@ -61,15 +72,12 @@ export const defaultHandlers = [
   // Report download
   http.get(`${BASE}/sessions/:id/report`, ({ params }) => {
     const sessionId = String(params.id);
-    return new HttpResponse(
-      `%PDF-1.4\n% Mock PDF for ${sessionId}\n`,
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="career-report-${sessionId.slice(0, 8)}.pdf"`,
-        },
+    return new HttpResponse(`%PDF-1.4\n% Mock PDF for ${sessionId}\n`, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="career-report-${sessionId.slice(0, 8)}.pdf"`,
       },
-    );
+    });
   }),
 ];

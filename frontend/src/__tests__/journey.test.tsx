@@ -1,10 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/msw-server";
-import { SESSION_INTAKE, SESSION_INTAKE_COMPLETE, SESSION_COMPLETE } from "../test/fixtures";
+import {
+  SESSION_INTAKE,
+  SESSION_INTAKE_COMPLETE,
+  SESSION_COMPLETE,
+  RECOMMENDATIONS,
+} from "../test/fixtures";
 import Home from "../routes/Home";
 import Onboarding from "../routes/Onboarding";
 import Results from "../routes/Results";
@@ -147,6 +152,25 @@ describe("Onboarding", () => {
     await waitFor(() => {
       expect(screen.getByText(/What are your core values/)).toBeInTheDocument();
     });
+  });
+
+  it("blocks very short answers and shows inline guidance", async () => {
+    const user = userEvent.setup();
+    renderAt(`/onboarding?session=${SESSION_INTAKE.id}`, <Onboarding />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByPlaceholderText(/Type your answer/),
+      ).toBeInTheDocument();
+    });
+
+    const input = screen.getByPlaceholderText(/Type your answer/);
+    await user.type(input, "ok");
+
+    expect(
+      screen.getByText(/Please add a little more detail/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   });
 
   it("adds quick-pick chips to the draft and reveals follow-up chips", async () => {
@@ -306,8 +330,7 @@ describe("Regression: chip tray hides on intakeComplete", () => {
           message: {
             id: "msg-final",
             role: "assistant",
-            content:
-              "Your profile is complete — hit Analyze when ready.",
+            content: "Your profile is complete — hit Analyze when ready.",
             timestamp: new Date().toISOString(),
           },
           profileUpdate: { burnoutConcerns: ["long hours"] },
@@ -320,10 +343,15 @@ describe("Regression: chip tray hides on intakeComplete", () => {
     renderAt(`/onboarding?session=${SESSION_INTAKE.id}`, <Onboarding />);
 
     await waitFor(() =>
-      expect(screen.getByPlaceholderText(/Type your answer/)).toBeInTheDocument(),
+      expect(
+        screen.getByPlaceholderText(/Type your answer/),
+      ).toBeInTheDocument(),
     );
 
-    await user.type(screen.getByPlaceholderText(/Type your answer/), "Long hours");
+    await user.type(
+      screen.getByPlaceholderText(/Type your answer/),
+      "Long hours",
+    );
     await user.keyboard("{Enter}");
 
     await waitFor(() => {
@@ -445,6 +473,34 @@ describe("Results", () => {
     );
   });
 
+  it("retries recommendations fetch when API returns 202 pending", async () => {
+    let recommendationCalls = 0;
+    server.use(
+      http.get("http://localhost:3001/sessions/:id/recommendations", () => {
+        recommendationCalls += 1;
+        if (recommendationCalls === 1) {
+          return HttpResponse.json(
+            {
+              status: "pending",
+              retryAfterMs: 10,
+              message: "Recommendations are still being generated.",
+            },
+            { status: 202 },
+          );
+        }
+        return HttpResponse.json(RECOMMENDATIONS);
+      }),
+    );
+
+    renderAt(`/results/${SESSION_COMPLETE.id}`, <Results />);
+
+    await waitFor(() => {
+      expect(screen.getByText("AI/ML Engineer — EdTech")).toBeInTheDocument();
+    });
+
+    expect(recommendationCalls).toBeGreaterThan(1);
+  });
+
   it('shows "Start new assessment" and "View all sessions" CTAs after results load', async () => {
     renderAt(`/results/${SESSION_COMPLETE.id}`, <Results />);
 
@@ -459,5 +515,35 @@ describe("Results", () => {
     expect(
       screen.getByRole("link", { name: "View all sessions" }),
     ).toBeInTheDocument();
+  });
+
+  it("copies recommendation summary to clipboard", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      clipboard: { writeText },
+    });
+
+    renderAt(`/results/${SESSION_COMPLETE.id}`, <Results />);
+
+    await waitFor(() => {
+      expect(screen.getByText("AI/ML Engineer — EdTech")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Copy Summary" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalled();
+      expect(screen.getByText(/Summary copied/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows observability panel when ops=1 query param is present", async () => {
+    renderAt(`/results/${SESSION_COMPLETE.id}?ops=1`, <Results />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Demo observability")).toBeInTheDocument();
+    });
   });
 });

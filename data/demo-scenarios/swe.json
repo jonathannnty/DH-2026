@@ -1,0 +1,24 @@
+{
+  "id": "swe-scenario",
+  "name": "Software Engineer Profile",
+  "description": "Tech-focused SWE with passion for systems, AI, and infrastructure",
+  "profile": {
+    "interests": "technology, artificial intelligence, systems design, music technology, data science",
+    "values": "autonomy, innovation, impact at scale, learning",
+    "workingStyle": "independent deep focus with occasional async collaboration",
+    "hardSkills": "Python, TypeScript, systems architecture, machine learning, DevOps",
+    "softSkills": "problem-solving, mentoring, communication, creativity",
+    "riskTolerance": "medium — open to calculated risks",
+    "salaryExpectations": {
+      "minimum": 90000,
+      "target": 150000,
+      "currency": "USD"
+    },
+    "geographicPreference": "remote — work from anywhere",
+    "education": "Bachelor's in Computer Science",
+    "timeline": "short term — within 6 months",
+    "purposePriorities": "building infrastructure that scales, solving hard problems, mentoring junior engineers",
+    "burnoutConcerns": "on-call rotations without breaks, constant context-switching, micromanagement"
+  },
+  "estimatedAnalysisTime": "35 seconds"
+}

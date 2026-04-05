@@ -1153,6 +1153,49 @@ function getTrackIcon(trackId: string) {
   return Compass;
 }
 
+const LOCAL_FALLBACK_TRACKS: SponsorTrack[] = [
+  {
+    id: "general",
+    name: "General Career Advising",
+    sponsor: "PathFinder AI",
+    description:
+      "Our default 12-dimension career assessment with broad, no-sponsor bias.",
+    icon: "compass",
+    color: "#6366f1",
+    tags: [],
+  },
+  {
+    id: "tech-career",
+    name: "Tech Career Accelerator",
+    sponsor: "TechCorp",
+    description:
+      "Software engineering, data, and technical leadership pathways.",
+    icon: "code",
+    color: "#06b6d4",
+    tags: ["tech", "engineering", "data"],
+  },
+  {
+    id: "healthcare-pivot",
+    name: "Healthcare Career Pivot",
+    sponsor: "HealthBridge",
+    description:
+      "Healthcare transitions across clinical, health-tech, and administration.",
+    icon: "heart-pulse",
+    color: "#10b981",
+    tags: ["healthcare", "health-tech", "clinical"],
+  },
+  {
+    id: "creative-industry",
+    name: "Creative Industry Paths",
+    sponsor: "CreativeForge",
+    description:
+      "Design, media, and content-focused careers with portfolio emphasis.",
+    icon: "palette",
+    color: "#f59e0b",
+    tags: ["creative", "design", "media"],
+  },
+];
+
 export default function Home() {
   const reduceMotion = useReducedMotion();
   const previousPreviewIndexRef = useRef(0);
@@ -1161,6 +1204,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [tracks, setTracks] = useState<SponsorTrack[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<string>("tech-career");
+  const [isUsingFallbackTracks, setIsUsingFallbackTracks] = useState(false);
   const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
   const [heroPhase, setHeroPhase] = useState<HeroPhase>("chaos");
   const [previewDirection, setPreviewDirection] = useState(1);
@@ -1169,12 +1213,21 @@ export default function Home() {
     getTracks()
       .then((t) => {
         setTracks(t);
+        setIsUsingFallbackTracks(false);
         // Keep tech-career as default if it exists; otherwise pick first
         const hasTech = t.find((tr) => tr.id === "tech-career");
         if (!hasTech && t.length > 0) setSelectedTrack(t[0].id);
       })
       .catch(() => {
-        /* tracks unavailable — proceed without a track */
+        setTracks(LOCAL_FALLBACK_TRACKS);
+        setIsUsingFallbackTracks(true);
+
+        const hasTech = LOCAL_FALLBACK_TRACKS.find(
+          (track) => track.id === "tech-career",
+        );
+        if (!hasTech && LOCAL_FALLBACK_TRACKS.length > 0) {
+          setSelectedTrack(LOCAL_FALLBACK_TRACKS[0].id);
+        }
       });
   }, []);
 
@@ -1560,6 +1613,19 @@ export default function Home() {
           >
             {HOME_COPY.track.chooserHeading}
           </div>
+          {isUsingFallbackTracks && (
+            <p
+              style={{
+                maxWidth: 1020,
+                width: "100%",
+                margin: "0 auto 12px",
+                fontSize: "0.8rem",
+                color: "var(--pf-color-text-muted)",
+              }}
+            >
+              Live track service is unavailable. Showing local fallback tracks.
+            </p>
+          )}
           <div style={trackGrid}>
             {tracks.map((t) => {
               const TrackIcon = getTrackIcon(t.id);
