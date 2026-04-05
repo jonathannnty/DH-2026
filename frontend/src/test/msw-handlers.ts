@@ -44,6 +44,7 @@ export const defaultHandlers = [
         timestamp: new Date().toISOString(),
       },
       profileUpdate: { interests: ['technology'] },
+      intakeComplete: false,
     }),
   ),
 

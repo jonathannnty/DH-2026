@@ -1,10 +1,10 @@
-import type { FastifyInstance } from 'fastify';
-import { randomUUID } from 'node:crypto';
+import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import { Buffer } from 'node:buffer';
-import { eq } from 'drizzle-orm';
+import { eq } from "drizzle-orm";
 import PDFDocument from 'pdfkit';
-import { db } from '../db/client.js';
-import { sessions } from '../db/schema.js';
+import { db } from "../db/client.js";
+import { sessions } from "../db/schema.js";
 import {
   type CareerProfile,
   type ChatMessage,
@@ -13,14 +13,22 @@ import {
   SendMessageRequestSchema,
   CreateSessionRequestSchema,
   canTransition,
-} from '../schemas/career.js';
-import { startAnalysis, getStatus, isAgentversePipelineReady } from '../services/agent.js';
-import { processIntakeMessage, getGreeting } from '../services/intake.js';
-import { getRecommendationsForTrack } from '../services/demo.js';
-import { generatePersonalizedFallback } from '../services/personalizedFallback.js';
-import { getAdapter } from '../services/adapters.js';
-import { isValidTrack } from '../services/tracks.js';
-import { loadEnv } from '../env.js';
+} from "../schemas/career.js";
+import {
+  startAnalysis,
+  getStatus,
+  isAgentReachable,
+} from "../services/agent.js";
+import {
+  processIntakeMessage,
+  getGreeting,
+  INTAKE_STEPS_COUNT,
+} from "../services/intake.js";
+import { getRecommendationsForTrack } from "../services/demo.js";
+import { generatePersonalizedFallback } from "../services/personalizedFallback.js";
+import { getAdapter } from "../services/adapters.js";
+import { isValidTrack } from "../services/tracks.js";
+import { loadEnv } from "../env.js";
 
 function now(): string {
   return new Date().toISOString();
@@ -176,11 +184,20 @@ function createPdfBufferFromMarkdown(markdown: string): Promise<Buffer> {
   });
 }
 
+async function buildFallbackRecommendations(
+  profile: CareerProfile,
+  trackId: string | null,
+): Promise<CareerRecommendation[]> {
+  const rawRecs = generatePersonalizedFallback(profile, trackId);
+  const adapter = getAdapter(trackId ?? "general");
+  return adapter.enrich(profile, rawRecs);
+}
+
 export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   const env = loadEnv();
 
   // ── POST /sessions ───────────────────────────────────────────────
-  app.post<{ Body: unknown }>('/sessions', async (req, reply) => {
+  app.post<{ Body: unknown }>("/sessions", async (req, reply) => {
     const parsed = CreateSessionRequestSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
       return reply.badRequest(parsed.error.issues[0].message);
@@ -196,16 +213,16 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
     const greeting: ChatMessage = {
       id: randomUUID(),
-      role: 'assistant',
+      role: "assistant",
       content: getGreeting(),
       timestamp: ts,
     };
 
     await db.insert(sessions).values({
       id,
-      status: 'intake',
+      status: "intake",
       trackId,
-      profile: '{}',
+      profile: "{}",
       messages: JSON.stringify([greeting]),
       createdAt: ts,
       updatedAt: ts,
@@ -213,7 +230,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.status(201).send({
       id,
-      status: 'intake' as const,
+      status: "intake" as const,
       trackId,
       profile: {},
       messages: [greeting],
@@ -223,16 +240,22 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── GET /sessions/:id ───────────────────────────────────────────
-  app.get<{ Params: { id: string } }>(
-    '/sessions/:id',
-    async (req, reply) => {
-      const row = await db
-        .select()
-        .from(sessions)
-        .where(eq(sessions.id, req.params.id))
-        .get();
+  app.get<{ Params: { id: string } }>("/sessions/:id", async (req, reply) => {
+    const row = await db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.id, req.params.id))
+      .get();
 
-      if (!row) return reply.notFound('Session not found');
+    if (!row) return reply.notFound("Session not found");
+
+    const messages = parseJson<ChatMessage[]>(row.messages, []);
+    // intakeComplete is deterministic: all INTAKE_STEPS_COUNT questions have been answered
+    // when the assistant has sent greeting + INTAKE_STEPS_COUNT messages (= INTAKE_STEPS_COUNT + 1 total).
+    const assistantCount = messages.filter(
+      (m) => m.role === "assistant",
+    ).length;
+    const intakeComplete = assistantCount > INTAKE_STEPS_COUNT;
 
       return {
         id: row.id,
@@ -292,7 +315,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
   // ── POST /sessions/:id/messages ─────────────────────────────────
   app.post<{ Params: { id: string }; Body: unknown }>(
-    '/sessions/:id/messages',
+    "/sessions/:id/messages",
     async (req, reply) => {
       const parsed = SendMessageRequestSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -305,9 +328,9 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         .where(eq(sessions.id, req.params.id))
         .get();
 
-      if (!row) return reply.notFound('Session not found');
+      if (!row) return reply.notFound("Session not found");
 
-      if (row.status !== 'intake') {
+      if (row.status !== "intake") {
         return reply.badRequest(
           `Cannot send messages in '${row.status}' status. Session must be in 'intake'.`,
         );
@@ -318,7 +341,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
       const userMessage: ChatMessage = {
         id: randomUUID(),
-        role: 'user',
+        role: "user",
         content: parsed.data.content,
         timestamp: now(),
       };
@@ -331,13 +354,20 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
       const assistantMessage: ChatMessage = {
         id: randomUUID(),
-        role: 'assistant',
+        role: "assistant",
         content: result.assistantContent,
         timestamp: now(),
       };
 
-      const updatedMessages = [...existingMessages, userMessage, assistantMessage];
-      const mergedProfile: CareerProfile = { ...currentProfile, ...result.profileUpdate };
+      const updatedMessages = [
+        ...existingMessages,
+        userMessage,
+        assistantMessage,
+      ];
+      const mergedProfile: CareerProfile = {
+        ...currentProfile,
+        ...result.profileUpdate,
+      };
       const ts = now();
 
       await db
@@ -352,13 +382,14 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({
         message: assistantMessage,
         profileUpdate: result.profileUpdate,
+        intakeComplete: result.intakeComplete,
       });
     },
   );
 
   // ── GET /sessions/:id/stream ────────────────────────────────────
   app.get<{ Params: { id: string } }>(
-    '/sessions/:id/stream',
+    "/sessions/:id/stream",
     async (req, reply) => {
       const row = await db
         .select()
@@ -366,21 +397,30 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         .where(eq(sessions.id, req.params.id))
         .get();
 
-      if (!row) return reply.notFound('Session not found');
+      if (!row) return reply.notFound("Session not found");
+
+      const requestOrigin = req.headers.origin;
+      const allowOrigin =
+        typeof requestOrigin === "string" ? requestOrigin : "*";
 
       reply.raw.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "Access-Control-Allow-Origin": allowOrigin,
+        Vary: "Origin",
       });
 
-      const send = (event: { type: string; payload: Record<string, unknown> }) => {
+      const send = (event: {
+        type: string;
+        payload: Record<string, unknown>;
+      }) => {
         reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
       };
 
-      send({ type: 'status', payload: { status: row.status } });
+      send({ type: "status", payload: { status: row.status } });
 
-      if (row.status !== 'analyzing') {
+      if (row.status !== "analyzing") {
         reply.raw.end();
         return;
       }
@@ -390,33 +430,34 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         const trackId = row.trackId ?? null;
 
         // Track-specific stage labels give each track a distinct feel
-        const stageLabels: [number, string][] = trackId === 'tech-career'
-          ? [
-            [25, 'Scanning tech job market signals'],
-            [50, 'Scoring engineering career fits'],
-            [75, 'Mapping salary bands and growth paths'],
-            [100, 'Finalizing your Tech Career report'],
-          ]
-          : trackId === 'healthcare-pivot'
-          ? [
-            [25, 'Evaluating healthcare sector fit'],
-            [50, 'Matching clinical and health-tech roles'],
-            [75, 'Modeling licensure and transition paths'],
-            [100, 'Finalizing your Healthcare Career report'],
-          ]
-          : trackId === 'creative-industry'
-          ? [
-            [25, 'Analysing creative industry landscape'],
-            [50, 'Scoring portfolio and skills alignment'],
-            [75, 'Identifying studio and freelance opportunities'],
-            [100, 'Finalizing your Creative Industry report'],
-          ]
-          : [
-            [25, 'Evaluating career fit'],
-            [50, 'Scoring recommendations'],
-            [75, 'Generating action plans'],
-            [100, 'Finalizing results'],
-          ];
+        const stageLabels: [number, string][] =
+          trackId === "tech-career"
+            ? [
+                [25, "Scanning tech job market signals"],
+                [50, "Scoring engineering career fits"],
+                [75, "Mapping salary bands and growth paths"],
+                [100, "Finalizing your Tech Career report"],
+              ]
+            : trackId === "healthcare-pivot"
+              ? [
+                  [25, "Evaluating healthcare sector fit"],
+                  [50, "Matching clinical and health-tech roles"],
+                  [75, "Modeling licensure and transition paths"],
+                  [100, "Finalizing your Healthcare Career report"],
+                ]
+              : trackId === "creative-industry"
+                ? [
+                    [25, "Analysing creative industry landscape"],
+                    [50, "Scoring portfolio and skills alignment"],
+                    [75, "Identifying studio and freelance opportunities"],
+                    [100, "Finalizing your Creative Industry report"],
+                  ]
+                : [
+                    [25, "Evaluating career fit"],
+                    [50, "Scoring recommendations"],
+                    [75, "Generating action plans"],
+                    [100, "Finalizing results"],
+                  ];
 
         const delays = [500, 800, 600, 400];
         // Note: 'complete' event is NOT in this array — it is emitted only after
@@ -429,13 +470,22 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         }));
 
         let cancelled = false;
-        req.raw.on('close', () => { cancelled = true; });
+        req.raw.on("close", () => {
+          cancelled = true;
+        });
 
         for (const step of progressSteps) {
           if (cancelled) break;
           await new Promise((r) => setTimeout(r, step.delay));
           if (cancelled) break;
-          send({ type: 'progress', payload: { status: 'analyzing', progress: step.progress, stage: step.stage } });
+          send({
+            type: "progress",
+            payload: {
+              status: "analyzing",
+              progress: step.progress,
+              stage: step.stage,
+            },
+          });
         }
 
         if (!cancelled) {
@@ -444,7 +494,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
           await db
             .update(sessions)
             .set({
-              status: 'complete',
+              status: "complete",
               recommendations: JSON.stringify(recs),
               updatedAt: now(),
             })
@@ -453,7 +503,10 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
           // 2. Only then signal the browser — DB is guaranteed ready
           await new Promise((r) => setTimeout(r, 300));
           if (!cancelled) {
-            send({ type: 'complete', payload: { status: 'complete', progress: 100 } });
+            send({
+              type: "complete",
+              payload: { status: "complete", progress: 100 },
+            });
           }
         }
 
@@ -479,28 +532,48 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         clearInterval(poll);
         clearTimeout(timeoutHandle);
 
-        app.log.warn({ sessionId: req.params.id, reason }, 'Analysis fallback triggered');
+        app.log.warn(
+          { sessionId: req.params.id, reason },
+          "Analysis fallback triggered",
+        );
 
         send({
-          type: 'progress',
-          payload: { status: 'analyzing', progress: 85, stage: 'Switching to personalised recommendations…', isFallback: true },
+          type: "progress",
+          payload: {
+            status: "analyzing",
+            progress: 85,
+            stage: "Switching to personalised recommendations…",
+            isFallback: true,
+          },
         });
 
         try {
           // Generate profile-derived recs, then apply track enrichment adapter
           const rawRecs = generatePersonalizedFallback(profile, trackId);
-          const adapter = getAdapter(trackId ?? 'general');
+          const adapter = getAdapter(trackId ?? "general");
           const recs = await adapter.enrich(profile, rawRecs);
 
           await db
             .update(sessions)
-            .set({ status: 'complete', recommendations: JSON.stringify(recs), updatedAt: now() })
+            .set({
+              status: "complete",
+              recommendations: JSON.stringify(recs),
+              updatedAt: now(),
+            })
             .where(eq(sessions.id, req.params.id));
 
-          send({ type: 'complete', payload: { status: 'complete', progress: 100, isFallback: true } });
+          send({
+            type: "complete",
+            payload: { status: "complete", progress: 100, isFallback: true },
+          });
         } catch (err) {
-          app.log.error(err, 'Fallback recommendation generation failed');
-          send({ type: 'error', payload: { message: 'Analysis could not be completed. Please try again.' } });
+          app.log.error(err, "Fallback recommendation generation failed");
+          send({
+            type: "error",
+            payload: {
+              message: "Analysis could not be completed. Please try again.",
+            },
+          });
         } finally {
           reply.raw.end();
         }
@@ -508,7 +581,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
       // Hard 20-second wall-clock deadline — guaranteed terminal transition
       const timeoutHandle = setTimeout(() => {
-        invokeFallback('20s analysis timeout exceeded');
+        invokeFallback("20s analysis timeout exceeded");
       }, ANALYSIS_TIMEOUT_MS);
 
       const poll = setInterval(async () => {
@@ -519,11 +592,15 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
           pollFailures = 0;
 
           send({
-            type: 'progress',
-            payload: { status: agentStatus.status, progress: agentStatus.progress, stage: agentStatus.stage },
+            type: "progress",
+            payload: {
+              status: agentStatus.status,
+              progress: agentStatus.progress,
+              stage: agentStatus.stage,
+            },
           });
 
-          if (agentStatus.status === 'complete') {
+          if (agentStatus.status === "complete") {
             if (terminated) return;
             terminated = true;
             clearInterval(poll);
@@ -533,45 +610,64 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
             let usedFallback = false;
 
             const agentRecs = agentStatus.recommendations ?? [];
-            const passesContract = meetsPersonalizationContract(agentRecs, profile, trackId);
+            const passesContract = meetsPersonalizationContract(
+              agentRecs,
+              profile,
+              trackId,
+            );
 
             if (agentRecs.length && passesContract) {
               // Live recs pass personalization contract — apply track enrichment
-              const adapter = getAdapter(trackId ?? 'general');
+              const adapter = getAdapter(trackId ?? "general");
               recs = await adapter.enrich(profile, agentRecs);
             } else {
               // Agent returned no recs, or recs failed personalization contract — use fallback
               if (agentRecs.length && !passesContract) {
                 app.log.warn(
                   { sessionId: req.params.id, recCount: agentRecs.length },
-                  'Live recs failed personalization contract — substituting personalized fallback',
+                  "Live recs failed personalization contract — substituting personalized fallback",
                 );
               }
               const rawRecs = generatePersonalizedFallback(profile, trackId);
-              const adapter = getAdapter(trackId ?? 'general');
+              const adapter = getAdapter(trackId ?? "general");
               recs = await adapter.enrich(profile, rawRecs);
               usedFallback = true;
             }
 
             await db
               .update(sessions)
-              .set({ status: 'complete', recommendations: JSON.stringify(recs), updatedAt: now() })
+              .set({
+                status: "complete",
+                recommendations: JSON.stringify(recs),
+                updatedAt: now(),
+              })
               .where(eq(sessions.id, req.params.id));
 
-            send({ type: 'complete', payload: { status: 'complete', progress: 100, isFallback: usedFallback } });
+            send({
+              type: "complete",
+              payload: {
+                status: "complete",
+                progress: 100,
+                isFallback: usedFallback,
+              },
+            });
             reply.raw.end();
-          } else if (agentStatus.status === 'error') {
-            await invokeFallback(`agent reported error: ${agentStatus.error ?? 'unknown'}`);
+          } else if (agentStatus.status === "error") {
+            await invokeFallback(
+              `agent reported error: ${agentStatus.error ?? "unknown"}`,
+            );
           }
         } catch {
           pollFailures++;
           if (pollFailures >= MAX_POLL_FAILURES) {
-            await invokeFallback('agent service unreachable after 3 consecutive poll failures');
+            await invokeFallback(
+              "agent service unreachable after 3 consecutive poll failures",
+            );
           }
         }
       }, POLL_INTERVAL_MS);
 
-      req.raw.on('close', () => {
+      req.raw.on("close", () => {
         terminated = true;
         clearInterval(poll);
         clearTimeout(timeoutHandle);
@@ -581,7 +677,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
   // ── POST /sessions/:id/analyze ──────────────────────────────────
   app.post<{ Params: { id: string } }>(
-    '/sessions/:id/analyze',
+    "/sessions/:id/analyze",
     async (req, reply) => {
       const row = await db
         .select()
@@ -589,15 +685,20 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         .where(eq(sessions.id, req.params.id))
         .get();
 
-      if (!row) return reply.notFound('Session not found');
+      if (!row) return reply.notFound("Session not found");
 
       const from = row.status as SessionStatus;
-      const to: SessionStatus = 'analyzing';
+      const to: SessionStatus = "analyzing";
+
+      // Idempotent: if already analyzing, return success without creating a duplicate run.
+      if (from === "analyzing") {
+        return reply.send({ ok: true as const, alreadyAnalyzing: true });
+      }
 
       if (!canTransition(from, to)) {
         return reply.badRequest(
           `Cannot transition from '${from}' to '${to}'. ` +
-          `Allowed transitions from '${from}': ${from === 'complete' ? 'none (terminal)' : "'analyzing', 'error'"}.`,
+            `Allowed transitions from '${from}': ${from === "complete" ? "none (terminal)" : "'analyzing', 'error'"}.`,
         );
       }
 
@@ -608,7 +709,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       if (env.DEMO_MODE) {
         await db
           .update(sessions)
-          .set({ status: 'analyzing', updatedAt: ts })
+          .set({ status: "analyzing", updatedAt: ts })
           .where(eq(sessions.id, req.params.id));
 
         return reply.send({ ok: true as const });
@@ -619,20 +720,66 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       // SSE stream's 20s timeout will invoke personalized fallback automatically.
       await db
         .update(sessions)
-        .set({ status: 'analyzing', updatedAt: ts })
+        .set({ status: "analyzing", updatedAt: ts })
         .where(eq(sessions.id, req.params.id));
 
-      const agentReady = await isAgentversePipelineReady();
-      if (agentReady) {
+      // Background guard: finalize stale analyzing sessions even if SSE stream is
+      // not connected or disconnects before fallback can run.
+      const BACKGROUND_ANALYSIS_GUARD_MS = 45_000;
+      setTimeout(() => {
+        void (async () => {
+          const current = await db
+            .select()
+            .from(sessions)
+            .where(eq(sessions.id, req.params.id))
+            .get();
+
+          if (!current || current.status !== "analyzing") return;
+
+          const currentProfile = parseJson<CareerProfile>(
+            current.profile,
+            profile,
+          );
+          const currentTrackId = current.trackId ?? null;
+          const recs = await buildFallbackRecommendations(
+            currentProfile,
+            currentTrackId,
+          );
+
+          await db
+            .update(sessions)
+            .set({
+              status: "complete",
+              recommendations: JSON.stringify(recs),
+              updatedAt: now(),
+            })
+            .where(eq(sessions.id, req.params.id));
+
+          app.log.warn(
+            { sessionId: req.params.id },
+            "Background analysis guard finalized stuck session with fallback recommendations",
+          );
+        })().catch((err) => {
+          app.log.error(
+            { err, sessionId: req.params.id },
+            "Background analysis guard failed to finalize stuck session",
+          );
+        });
+      }, BACKGROUND_ANALYSIS_GUARD_MS);
+
+      const agentUp = await isAgentReachable();
+      if (agentUp) {
         startAnalysis(req.params.id, profile, row.trackId).catch((err) => {
-          app.log.warn(err, 'startAnalysis call failed — SSE timeout will trigger fallback');
+          app.log.warn(
+            err,
+            "startAnalysis call failed — SSE timeout will trigger fallback",
+          );
         });
       } else {
-        app.log.warn({ sessionId: req.params.id }, 'Agentverse-backed 4-agent pipeline is not ready');
-        return reply.status(503).send({
-          ok: false as const,
-          message: 'Agentverse-backed analysis is not ready. Start the Python agent service with ENABLE_AGENTVERSE_LINK=true so the four-agent pipeline can generate the top 3 job matches.',
-        });
+        app.log.warn(
+          { sessionId: req.params.id },
+          "Agent unreachable at analyze time — SSE timeout will trigger personalized fallback",
+        );
       }
 
       return reply.send({ ok: true as const });
@@ -641,7 +788,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
   // ── GET /sessions/:id/recommendations ───────────────────────────
   app.get<{ Params: { id: string } }>(
-    '/sessions/:id/recommendations',
+    "/sessions/:id/recommendations",
     async (req, reply) => {
       const row = await db
         .select()
@@ -649,15 +796,15 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         .where(eq(sessions.id, req.params.id))
         .get();
 
-      if (!row) return reply.notFound('Session not found');
+      if (!row) return reply.notFound("Session not found");
 
-      if (row.status !== 'complete') {
+      if (row.status !== "complete") {
         return reply.badRequest(
           `Recommendations not ready. Current status: '${row.status}'. Must be 'complete'.`,
         );
       }
 
-      return parseJson<CareerRecommendation[]>(row.recommendations ?? '[]', []);
+      return parseJson<CareerRecommendation[]>(row.recommendations ?? "[]", []);
     },
   );
 }

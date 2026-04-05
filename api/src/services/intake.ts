@@ -110,6 +110,9 @@ const STEPS: IntakeStep[] = [
 
 // ─── Public API ────────────────────────────────────────────────────
 
+/** Number of intake questions (not counting the greeting). */
+export const INTAKE_STEPS_COUNT = STEPS.length;
+
 export interface IntakeResult {
   assistantContent: string;
   profileUpdate: Partial<CareerProfile>;

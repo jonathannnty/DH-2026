@@ -24,6 +24,7 @@ export const SESSION_INTAKE: SessionResponse = {
   id: 'test-session-001',
   status: 'intake',
   trackId: 'tech-career',
+  intakeComplete: false,
   profile: {},
   messages: [
     {
@@ -37,10 +38,16 @@ export const SESSION_INTAKE: SessionResponse = {
   updatedAt: '2026-04-04T00:00:00.000Z',
 };
 
+export const SESSION_INTAKE_COMPLETE: SessionResponse = {
+  ...SESSION_INTAKE,
+  intakeComplete: true,
+};
+
 export const SESSION_COMPLETE: SessionResponse = {
   id: 'test-session-002',
   status: 'complete',
   trackId: 'tech-career',
+  intakeComplete: true,
   profile: {
     interests: ['technology', 'AI'],
     hardSkills: ['Python', 'TypeScript'],
