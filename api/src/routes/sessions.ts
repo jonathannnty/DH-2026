@@ -52,6 +52,55 @@ function formatSalaryRange(range?: CareerRecommendation['salaryRange']): string 
   return `$${range.low.toLocaleString()} - $${range.high.toLocaleString()} ${range.currency}`;
 }
 
+interface ResourceLink {
+  title: string;
+  url: string;
+  description: string;
+}
+
+const CAREER_RESOURCES: ResourceLink[] = [
+  {
+    title: 'Levels.fyi - Salary Calculator',
+    url: 'https://www.levels.fyi/',
+    description: 'Compare salaries and levels across tech companies worldwide',
+  },
+  {
+    title: 'LinkedIn - Build Your Professional Network',
+    url: 'https://www.linkedin.com/',
+    description: 'Connect with professionals and explore job opportunities',
+  },
+  {
+    title: 'Reforge - Professional Skills Courses',
+    url: 'https://www.reforge.com/',
+    description: 'Learn advanced skills like Product Management and Analytics',
+  },
+  {
+    title: 'Glassdoor - Company Reviews',
+    url: 'https://www.glassdoor.com/',
+    description: 'Read salary reports and employee reviews of companies',
+  },
+  {
+    title: 'AngelList - Startup Jobs',
+    url: 'https://www.angellist.com/',
+    description: 'Find jobs at early-stage startups and explore equity opportunities',
+  },
+  {
+    title: 'Data Camp - Data Science Learning',
+    url: 'https://www.datacamp.com/',
+    description: 'Master Python, SQL, and data analytics skills online',
+  },
+  {
+    title: 'Coursera - Online Certifications',
+    url: 'https://www.coursera.org/',
+    description: 'Earn recognized credentials from top universities and companies',
+  },
+  {
+    title: 'GitHub - Portfolio Showcase',
+    url: 'https://www.github.com/',
+    description: 'Build your technical portfolio and contribute to open-source projects',
+  },
+];
+
 function buildReportMarkdown(session: {
   id: string;
   trackId: string | null;
@@ -91,6 +140,10 @@ function buildReportMarkdown(session: {
     }).join('\n\n')
     : 'No recommendations were generated for this session.';
 
+  const resourcesSection = CAREER_RESOURCES.map(
+    (resource) => `- ${resource.title}\n  ${resource.url}\n  ${resource.description}`,
+  ).join('\n\n');
+
   return [
     '# Career Guidance Report',
     '',
@@ -121,6 +174,10 @@ function buildReportMarkdown(session: {
     '',
     actionSteps.length ? formatList(actionSteps) : 'No next steps were generated.',
     '',
+    '## Useful Career Resources',
+    '',
+    resourcesSection,
+    '',
     '## Notes',
     '',
     'This report was generated from the completed assessment and is suitable for download, sharing, or printing to PDF.',
@@ -143,6 +200,12 @@ function markdownLineToText(line: string): { text: string; bold: boolean; size: 
   return { text: line, bold: false, size: 10, indent: 0 };
 }
 
+/** Extract URL from a line (matches https://... patterns) */
+function extractUrl(line: string): string | null {
+  const urlMatch = line.match(/https?:\/\/[^\s]+/);
+  return urlMatch ? urlMatch[0] : null;
+}
+
 function createPdfBufferFromMarkdown(markdown: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 48, autoFirstPage: true });
@@ -162,6 +225,7 @@ function createPdfBufferFromMarkdown(markdown: string): Promise<Buffer> {
     doc.info.Author = 'PathFinder AI';
     doc.info.Subject = 'Career recommendations and action plan';
 
+    // Set default link color for all URLs in the document
     const lines = markdown.split('\n');
     for (const line of lines) {
       if (line.trim() === '') {
@@ -170,10 +234,29 @@ function createPdfBufferFromMarkdown(markdown: string): Promise<Buffer> {
       }
 
       const style = markdownLineToText(line);
+      const url = extractUrl(line);
+
       doc
         .font(style.bold ? 'Helvetica-Bold' : 'Helvetica')
-        .fontSize(style.size)
-        .text(style.text, { indent: style.indent, lineGap: 2 });
+        .fontSize(style.size);
+
+      // If there's a URL in the line, create a hyperlink
+      if (url) {
+        // Get the current position before writing
+        const x = doc.x + style.indent;
+        const y = doc.y;
+        
+        // Write the text with underline to indicate it's a link
+        doc.text(style.text, x, y, {
+          indent: style.indent,
+          lineGap: 2,
+          underline: true,
+          link: url,
+        });
+      } else {
+        // Regular text without hyperlink
+        doc.text(style.text, { indent: style.indent, lineGap: 2 });
+      }
 
       if (style.size >= 13) {
         doc.moveDown(0.2);
