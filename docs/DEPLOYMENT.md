@@ -15,17 +15,32 @@ VITE_API_URL=https://api.pathfinder-demo.example.com
 VITE_AGENT_URL=https://agent.pathfinder-demo.example.com (optional, for prefetch)
 ```
 
+Double-check protocol prefixes when entering values in the Vercel UI (`https://...`, not `ttps://...`).
+
 ### Build Command
 
 ```bash
 npm run build --workspace frontend
 ```
 
+### Vercel Import Settings (Monorepo)
+
+If you deploy only the frontend package from this monorepo, use these exact values in Vercel:
+
+- Root Directory: `frontend`
+- Install Command: `npm install`
+- Build Command: `npm run build`
+- Output Directory: `dist`
+
+Do not prefix the build command with `bash` in the Vercel UI.
+
 ### Artifact
 
 ```
 frontend/dist/
 ```
+
+If Root Directory is `frontend`, the output directory must be `dist` (not `frontend/dist`).
 
 ### CORS & Base URL
 

@@ -12,7 +12,7 @@ import {
 const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 // Unique correlation ID per session (generated once at app startup or on new session)
-let currentCorrelationId = crypto.randomUUID();
+let currentCorrelationId: string = crypto.randomUUID();
 
 export function setCorrelationId(id: string): void {
   currentCorrelationId = id;
