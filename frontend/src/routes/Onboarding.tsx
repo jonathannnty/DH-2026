@@ -116,6 +116,7 @@ export default function Onboarding() {
   const [params] = useSearchParams();
   const nav = useNavigate();
   const sessionId = params.get("session");
+  const routeTrack = params.get("track");
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [profile, setProfile] = useState<CareerProfile>({});
@@ -146,7 +147,13 @@ export default function Onboarding() {
 
         // If already beyond intake, redirect to the right page
         if (s.status === "analyzing" || s.status === "complete") {
-          nav(`/results/${sessionId}`, { replace: true });
+          const finalTrack = s.trackId ?? routeTrack;
+          nav(
+            finalTrack
+              ? `/results/${sessionId}?track=${encodeURIComponent(finalTrack)}`
+              : `/results/${sessionId}`,
+            { replace: true },
+          );
           return;
         }
 
@@ -163,7 +170,7 @@ export default function Onboarding() {
 
         setMessages(s.messages);
         setProfile(s.profile);
-        setTrackId(s.trackId);
+        setTrackId(s.trackId ?? routeTrack);
 
         // Detect if session was previously completed through intake
         const lastMsg = s.messages[s.messages.length - 1];
@@ -177,7 +184,7 @@ export default function Onboarding() {
         setLoadState("ready");
       })
       .catch(() => setLoadState("error"));
-  }, [sessionId, nav]);
+  }, [sessionId, nav, routeTrack]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -270,7 +277,12 @@ export default function Onboarding() {
     setAnalyzeError(null);
     try {
       await triggerAnalysis(sessionId);
-      nav(`/results/${sessionId}`);
+      const finalTrack = trackId ?? routeTrack;
+      nav(
+        finalTrack
+          ? `/results/${sessionId}?track=${encodeURIComponent(finalTrack)}`
+          : `/results/${sessionId}`,
+      );
     } catch (err) {
       setAnalyzing(false);
       setAnalyzeError(

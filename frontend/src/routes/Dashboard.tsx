@@ -55,6 +55,12 @@ function getSessionActionIcon(status: SessionStatus) {
   return ArrowUpRight;
 }
 
+function withTrackQuery(target: string, trackId: string | null): string {
+  if (!trackId) return target;
+  const separator = target.includes("?") ? "&" : "?";
+  return `${target}${separator}track=${encodeURIComponent(trackId)}`;
+}
+
 export default function Dashboard() {
   const reduceMotion = useReducedMotion();
   const nav = useNavigate();
@@ -108,7 +114,7 @@ export default function Dashboard() {
     setNewLoading(true);
     try {
       const session = await createSession();
-      nav(`/onboarding?session=${session.id}`);
+      nav(`/onboarding?session=${session.id}&track=general`);
     } catch {
       setNewLoading(false);
     }
@@ -249,9 +255,10 @@ export default function Dashboard() {
         const color = statusDisplay.color;
         const ActionIcon = getSessionActionIcon(s.status);
 
-        const linkTarget = canOpenSession
+        const baseLinkTarget = canOpenSession
           ? getSessionDestination(s.id, s.status)
           : "/dashboard";
+        const linkTarget = withTrackQuery(baseLinkTarget, s.trackId);
 
         const isSelected = compareAId === s.id;
         const canBeComparedWith =

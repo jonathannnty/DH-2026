@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { House, LayoutDashboard, MoonStar, Sun } from "lucide-react";
 import { IconLabel } from "@/components/ui/IconLabel";
+import { PathFinderLogo } from "@/components/PathFinderLogo";
 
 const navStyle: React.CSSProperties = {
   display: "flex",
@@ -17,11 +18,9 @@ const navStyle: React.CSSProperties = {
 };
 
 const logoStyle: React.CSSProperties = {
-  fontSize: "1.15rem",
-  fontWeight: 800,
-  fontFamily: "var(--pf-font-family-display)",
-  color: "var(--pf-color-text-primary)",
-  letterSpacing: "-0.01em",
+  display: "inline-flex",
+  alignItems: "center",
+  textDecoration: "none",
 };
 
 const linkStyle = (active: boolean): React.CSSProperties => ({
@@ -75,6 +74,38 @@ const navLinks = [
 ];
 
 type ThemeMode = "dark" | "light";
+type LogoTrack =
+  | "general"
+  | "tech"
+  | "healthcare"
+  | "creative"
+  | "tech-career"
+  | "healthcare-pivot"
+  | "creative-industry";
+
+function resolveLogoTrack(pathname: string, search: string): LogoTrack {
+  const rawTrack = new URLSearchParams(search).get("track");
+  const isTrackFlowRoute =
+    pathname.startsWith("/onboarding") || pathname.startsWith("/results");
+
+  if (!isTrackFlowRoute || !rawTrack) {
+    return "general";
+  }
+
+  switch (rawTrack) {
+    case "tech":
+    case "tech-career":
+      return rawTrack;
+    case "healthcare":
+    case "healthcare-pivot":
+      return rawTrack;
+    case "creative":
+    case "creative-industry":
+      return rawTrack;
+    default:
+      return "general";
+  }
+}
 
 function getInitialTheme(): ThemeMode {
   if (typeof document !== "undefined") {
@@ -100,7 +131,7 @@ function getInitialTheme(): ThemeMode {
 
 export default function Layout({ children }: { children: ReactNode }) {
   const reduceMotion = useReducedMotion();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const shellRef = useRef<HTMLDivElement>(null);
   const previousThemeRef = useRef<ThemeMode | null>(null);
   const themeTransitionTimerRef = useRef<number | null>(null);
@@ -108,6 +139,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   const isHome = pathname === "/";
   const isDashboard = pathname === "/dashboard";
+  const logoTrack = resolveLogoTrack(pathname, search);
 
   const ambientMood = isHome
     ? "home"
@@ -218,7 +250,12 @@ export default function Layout({ children }: { children: ReactNode }) {
       </div>
       <nav style={navStyle}>
         <Link to="/" style={logoStyle}>
-          PathFinder AI
+          <PathFinderLogo
+            variant="full"
+            track={logoTrack}
+            size="md"
+            tone={theme}
+          />
         </Link>
         <div style={navLinksStyle}>
           {navLinks.map((item) => {

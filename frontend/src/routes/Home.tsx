@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { createSession, getTracks } from "@/lib/api";
 import { HOME_COPY } from "@/lib/copy";
 import type { SponsorTrack } from "@/schemas/career";
@@ -8,18 +8,20 @@ import {
   Activity,
   ArrowRight,
   ArrowUpRight,
-  Briefcase,
+  Brain,
   Compass,
   Cpu,
   Palette,
   Sparkles,
   Stethoscope,
+  Target,
+  TrendingUp,
 } from "lucide-react";
 import {
   canPerformUiAction,
   deriveHomeStateContract,
 } from "@/types/uiStateContract";
-import { IconLabel, getIconSpec } from "@/components/ui/IconLabel";
+import { IconLabel } from "@/components/ui/IconLabel";
 
 const container: React.CSSProperties = {
   flex: 1,
@@ -34,63 +36,75 @@ const container: React.CSSProperties = {
 const heroSection: React.CSSProperties = {
   position: "relative",
   maxWidth: 1020,
-  margin: "0 auto 28px",
+  margin: "0 auto 24px",
   width: "100%",
   border: "1px solid var(--pf-surface-card-border)",
   borderRadius: "calc(var(--pf-radius-md) + 4px)",
-  background:
-    "linear-gradient(140deg, color-mix(in srgb, var(--pf-color-bg-surface) 94%, var(--pf-color-brand-500) 6%), var(--pf-color-bg-surface))",
+  background: "var(--pf-home-hero-bg)",
   overflow: "hidden",
+  minHeight: 640,
 };
 
-const heroInner: React.CSSProperties = {
+const heroBody: React.CSSProperties = {
   position: "relative",
   zIndex: 1,
-  padding: "34px 30px 28px",
+  padding: "34px 30px 30px",
+  display: "flex",
+  flexDirection: "column",
+  minHeight: 640,
 };
 
-const kicker: React.CSSProperties = {
+const heroTagline: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "8px 14px",
+  borderRadius: "var(--pf-radius-pill)",
+  border: "1px solid var(--pf-home-hero-tagline-border)",
+  background: "var(--pf-home-hero-tagline-bg)",
+  marginBottom: 16,
+  width: "fit-content",
+};
+
+const heroTaglineText: React.CSSProperties = {
   fontFamily: "var(--pf-font-family-accent)",
-  fontSize: "0.76rem",
-  letterSpacing: "0.18em",
+  fontSize: "0.72rem",
+  letterSpacing: "0.16em",
   textTransform: "uppercase",
-  color: "var(--pf-color-brand-400)",
-  marginBottom: 12,
+  color: "var(--pf-home-hero-tagline-text)",
   fontWeight: 700,
 };
 
-const heading: React.CSSProperties = {
-  fontSize: "clamp(2rem, 5.4vw, 3.75rem)",
+const heroTitle: React.CSSProperties = {
+  fontSize: "clamp(2.1rem, 5.6vw, 4rem)",
   fontWeight: 800,
-  lineHeight: 1.02,
-  marginBottom: 14,
-  maxWidth: "12ch",
+  lineHeight: 1.04,
+  marginBottom: 12,
+  maxWidth: "15ch",
+  display: "grid",
+  gap: 6,
 };
 
-const sub: React.CSSProperties = {
+const heroSubtitle: React.CSSProperties = {
   fontSize: "1.03rem",
   color: "var(--pf-color-text-muted)",
-  maxWidth: 650,
-  marginBottom: 20,
+  maxWidth: 690,
+  marginBottom: 18,
   lineHeight: 1.7,
 };
 
-const signalGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: 10,
-  width: "100%",
-  maxWidth: 760,
+const phaseCanvas: React.CSSProperties = {
+  position: "relative",
+  flex: 1,
+  minHeight: 360,
+  borderRadius: "var(--pf-radius-md)",
+  border: "1px solid var(--pf-home-hero-phase-border)",
+  background: "var(--pf-home-hero-phase-bg)",
+  overflow: "hidden",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   marginBottom: 18,
-};
-
-const signalCard: React.CSSProperties = {
-  border:
-    "1px solid color-mix(in srgb, var(--pf-surface-card-border) 80%, var(--pf-color-brand-500) 20%)",
-  background:
-    "linear-gradient(130deg, color-mix(in srgb, var(--pf-color-bg-subtle) 92%, var(--pf-color-brand-500) 8%), var(--pf-color-bg-subtle))",
-  borderRadius: "var(--pf-radius-sm)",
-  padding: "9px 10px",
 };
 
 const btn = (loading: boolean): React.CSSProperties => ({
@@ -106,6 +120,30 @@ const btn = (loading: boolean): React.CSSProperties => ({
   transition: "background 0.2s",
   cursor: loading ? "not-allowed" : "pointer",
   opacity: loading ? 0.7 : 1,
+});
+
+const heroFooter: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 14,
+  flexWrap: "wrap",
+};
+
+const phaseChip = (active: boolean): React.CSSProperties => ({
+  padding: "6px 10px",
+  borderRadius: "var(--pf-radius-pill)",
+  fontSize: "0.72rem",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  fontWeight: 700,
+  color: active ? "#dbe5ff" : "var(--pf-color-text-muted)",
+  background: active
+    ? "color-mix(in srgb, var(--pf-color-brand-500) 22%, transparent)"
+    : "color-mix(in srgb, var(--pf-color-bg-subtle) 84%, transparent)",
+  border: active
+    ? "1px solid color-mix(in srgb, var(--pf-color-brand-500) 46%, transparent)"
+    : "1px solid var(--pf-surface-card-border)",
 });
 
 const trackGrid: React.CSSProperties = {
@@ -132,19 +170,6 @@ const trackPreviewShell: React.CSSProperties = {
   padding: "16px 18px",
   overflow: "hidden",
   minHeight: 132,
-};
-
-const heroRotatorLine: React.CSSProperties = {
-  fontFamily: "var(--pf-font-family-accent)",
-  fontSize: "0.86rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.12em",
-  color: "var(--pf-color-text-muted)",
-  marginBottom: 14,
-  minHeight: 24,
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 8,
 };
 
 const features: React.CSSProperties = {
@@ -174,27 +199,477 @@ const iconWrap: React.CSSProperties = {
   background: "color-mix(in srgb, var(--pf-color-brand-500) 14%, transparent)",
 };
 
-const heroSignals = [
-  {
-    icon: Compass,
-    label: HOME_COPY.heroSignals[0].label,
-    detail: HOME_COPY.heroSignals[0].detail,
+type HeroPhase = "chaos" | "organizing" | "clarity";
+
+const heroPhaseLabels: Record<HeroPhase, string> = {
+  chaos: "Chaos",
+  organizing: "Organizing",
+  clarity: "Clarity",
+};
+
+const heroPhaseSequence: HeroPhase[] = ["chaos", "organizing", "clarity"];
+
+const heroPhaseDurations: Record<HeroPhase, number> = {
+  chaos: 2800,
+  organizing: 2600,
+  clarity: 6200,
+};
+
+const heroPhaseCopy: Record<
+  HeroPhase,
+  { lead: string; title: string; subtitle: string }
+> = {
+  chaos: {
+    lead: "Lost in Career Chaos?",
+        title: "Find Your Career Path",
+    subtitle: "Too many questions. Too many options. No clear direction.",
   },
-  {
-    icon: Sparkles,
-    label: HOME_COPY.heroSignals[1].label,
-    detail: HOME_COPY.heroSignals[1].detail,
+  organizing: {
+    lead: "Finding Your Path...",
+        title: "Find Your Career Path",
+    subtitle: "A guided assessment transforms confusion into clarity.",
   },
-  {
-    icon: Briefcase,
-    label: HOME_COPY.heroSignals[2].label,
-    detail: HOME_COPY.heroSignals[2].detail,
+  clarity: {
+    lead: "Clear Career Signals",
+        title: "Find Your Career Path",
+    subtitle:
+      "A guided assessment that transforms your profile into ranked career recommendations with clear reasoning and immediate next steps.",
   },
+};
+
+const heroQuestions = [
+  "What am I good at?",
+  "What pays well?",
+  "What gives meaning?",
+  "Where do I fit?",
+  "What's my timeline?",
+  "Can I afford this?",
+  "Am I too late?",
+  "What if I fail?",
+  "Remote or office?",
+  "Stable or risky?",
+  "What skills matter?",
+  "Will I burn out?",
 ] as const;
 
-const heroRotatorWords = HOME_COPY.hero.rotatorWords;
+const assessmentDimensions = [
+  "Interests",
+  "Values",
+  "Hard Skills",
+  "Soft Skills",
+  "Risk Tolerance",
+  "Financial Needs",
+  "Location",
+  "Education",
+  "Timeline",
+  "Purpose",
+  "Burnout Risk",
+  "Work Style",
+] as const;
 
-const ctaIcon = getIconSpec("cta");
+const clarityCards = [
+  { title: "Software Engineer", score: 94, salary: "$120k-$180k", color: "#22c55e" },
+  { title: "Data Scientist", score: 89, salary: "$118k-$172k", color: "#818cf8" },
+  { title: "Product Manager", score: 82, salary: "$112k-$165k", color: "#f59e0b" },
+] as const;
+
+function getNextPhase(current: HeroPhase): HeroPhase {
+  if (current === "chaos") return "organizing";
+  if (current === "organizing") return "clarity";
+  return "chaos";
+}
+
+function ChaosVisualization({
+  reduceMotion,
+  onInteract,
+}: {
+  reduceMotion: boolean;
+  onInteract: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {heroQuestions.map((question, index) => {
+        const angle = (index / heroQuestions.length) * Math.PI * 2;
+        const radius = 150 + (index % 4) * 24;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        const drift = index % 2 === 0 ? 1 : -1;
+
+        return (
+          <motion.div
+            key={question}
+            className="phase-question"
+            style={{
+              position: "absolute",
+              padding: "7px 12px",
+              borderRadius: "var(--pf-radius-sm)",
+              fontSize: "0.74rem",
+              color: "var(--pf-home-hero-question-text)",
+              border: "1px solid var(--pf-home-hero-question-border)",
+              background: "var(--pf-home-hero-question-bg)",
+              backdropFilter: "blur(6px)",
+            }}
+            initial={{ opacity: 0, scale: 0.88, x: 0, y: 0 }}
+            animate={
+              reduceMotion
+                ? { opacity: 0.72, scale: 1, x, y }
+                : {
+                    opacity: [0.4, 0.86, 0.45],
+                    x: [x, x + 8 * drift, x - 6 * drift, x],
+                    y: [y, y - 10 * drift, y + 7 * drift, y],
+                    rotate: [0, 4 * drift, -3 * drift, 0],
+                  }
+            }
+            transition={
+              reduceMotion
+                ? { duration: 0.3, delay: index * 0.03 }
+                : {
+                    duration: 4.8 + (index % 3) * 0.55,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: index * 0.05,
+                  }
+            }
+          >
+            {question}
+          </motion.div>
+        );
+      })}
+
+      <motion.button
+        type="button"
+        className="phase-canvas-center"
+        onClick={onInteract}
+        style={{
+          position: "relative",
+          zIndex: 2,
+          border: "1px solid var(--pf-home-hero-center-border)",
+          background: "var(--pf-home-hero-center-bg)",
+          color: "var(--pf-home-hero-center-text)",
+          borderRadius: "var(--pf-radius-md)",
+          padding: "14px 16px",
+          minWidth: 234,
+          display: "grid",
+          gap: 4,
+        }}
+        animate={
+          reduceMotion
+            ? undefined
+            : {
+                boxShadow: [
+                  "0 0 0 0 rgba(99, 102, 241, 0.34)",
+                  "0 0 0 16px rgba(99, 102, 241, 0)",
+                  "0 0 0 0 rgba(99, 102, 241, 0)",
+                ],
+              }
+        }
+        transition={
+          reduceMotion
+            ? undefined
+            : { duration: 1.9, repeat: Infinity, ease: "easeInOut" }
+      }
+      >
+        <span style={{ fontWeight: 700, fontSize: "0.98rem" }}>
+          Too many questions
+        </span>
+        <span
+          style={{
+            fontSize: "0.76rem",
+            color: "#97a2b8",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+          }}
+        >
+          Click to organize
+          <ArrowRight size={13} strokeWidth={1.9} aria-hidden="true" />
+        </span>
+      </motion.button>
+    </div>
+  );
+}
+
+function OrganizingVisualization({
+  reduceMotion,
+}: {
+  reduceMotion: boolean;
+}) {
+  const radius = 162;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {assessmentDimensions.map((dimension, index) => {
+        const angle = (index / assessmentDimensions.length) * Math.PI * 2;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        const angleDeg = (angle * 180) / Math.PI;
+
+        return (
+          <Fragment key={dimension}>
+            <motion.span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                width: radius,
+                height: 1,
+                background:
+                  "linear-gradient(90deg, var(--pf-home-hero-dimension-line-start), var(--pf-home-hero-dimension-line-end))",
+                transformOrigin: "0% 50%",
+                transform: `translateY(-50%) rotate(${angleDeg}deg)`,
+              }}
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{
+                delay: reduceMotion ? 0 : 0.28 + index * 0.05,
+                duration: reduceMotion ? 0.2 : 0.44,
+                ease: "easeOut",
+              }}
+            />
+            <motion.div
+              key={dimension}
+              className="phase-dimension"
+              style={{ position: "absolute", left: "50%", top: "50%" }}
+              initial={{ opacity: 0, x: -10, y: -10, scale: 0.76 }}
+              animate={{ opacity: 1, x, y, scale: 1 }}
+              transition={{
+                duration: reduceMotion ? 0.2 : 0.64,
+                delay: reduceMotion ? 0 : index * 0.06,
+                ease: [0.34, 1.56, 0.64, 1],
+              }}
+            >
+              <div
+                style={{
+                  transform: "translate(-50%, -50%)",
+                  padding: "6px 10px",
+                  borderRadius: "var(--pf-radius-sm)",
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                  color: "var(--pf-home-hero-dimension-text)",
+                  background: "var(--pf-home-hero-dimension-bg)",
+                  border: "1px solid var(--pf-home-hero-dimension-border)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {dimension}
+              </div>
+            </motion.div>
+          </Fragment>
+        );
+      })}
+
+      <motion.div
+        className="phase-canvas-center"
+        style={{
+          zIndex: 2,
+          minWidth: 176,
+          borderRadius: "var(--pf-radius-md)",
+          padding: "14px 14px",
+          border: "1px solid var(--pf-home-hero-center-border)",
+          background: "var(--pf-home-hero-center-bg)",
+          color: "var(--pf-home-hero-center-text)",
+          textAlign: "center",
+        }}
+        initial={{ opacity: 0, scale: 0.84 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.34, ease: "easeOut" }}
+      >
+        <motion.span
+          aria-hidden="true"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: "50%",
+            border: "2px solid rgba(129, 140, 248, 0.8)",
+            borderTopColor: "transparent",
+            display: "inline-block",
+            marginBottom: 8,
+          }}
+          animate={reduceMotion ? undefined : { rotate: 360 }}
+          transition={
+            reduceMotion
+              ? undefined
+              : { duration: 0.9, repeat: Infinity, ease: "linear" }
+          }
+        />
+        <div
+          style={{ fontSize: "0.74rem", textTransform: "uppercase", letterSpacing: "0.08em" }}
+        >
+          Analyzing...
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function ClarityVisualization({
+  reduceMotion,
+}: {
+  reduceMotion: boolean;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+        gap: 12,
+        alignContent: "center",
+        padding: "18px 16px",
+      }}
+    >
+      {clarityCards.map((career, index) => (
+        <motion.article
+          key={career.title}
+          className="phase-card"
+          style={{
+            position: "relative",
+            borderRadius: "var(--pf-radius-md)",
+            border: "1px solid var(--pf-home-hero-card-border)",
+            background: "var(--pf-home-hero-card-bg)",
+            padding: "14px 14px 12px",
+            overflow: "hidden",
+            boxShadow: "var(--pf-home-hero-card-shadow)",
+          }}
+          initial={{ opacity: 0, y: 22, scale: 0.92 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{
+            duration: 0.48,
+            delay: reduceMotion ? 0 : index * 0.12,
+            ease: [0.34, 1.56, 0.64, 1],
+          }}
+          whileHover={reduceMotion ? undefined : { y: -7, scale: 1.02 }}
+        >
+          <motion.span
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: `linear-gradient(140deg, ${career.color}22, transparent 65%)`,
+              opacity: 0.64,
+            }}
+            animate={reduceMotion ? undefined : { opacity: [0.4, 0.72, 0.46] }}
+            transition={
+              reduceMotion
+                ? undefined
+                : { duration: 2.4, repeat: Infinity, ease: "easeInOut" }
+            }
+          />
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <div
+              className="phase-card-title"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 10,
+                gap: 8,
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--pf-home-hero-card-title)" }}>
+                {career.title}
+              </div>
+              <span
+                className="phase-card-score"
+                style={{
+                  borderRadius: "var(--pf-radius-pill)",
+                  border: `1px solid ${career.color}`,
+                  color: career.color,
+                  padding: "3px 8px",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                }}
+              >
+                {career.score}%
+              </span>
+            </div>
+            <div
+              style={{
+                height: 6,
+                borderRadius: 999,
+                overflow: "hidden",
+                background: "rgba(110, 118, 142, 0.4)",
+                marginBottom: 10,
+              }}
+            >
+              <motion.span
+                style={{
+                  display: "block",
+                  height: "100%",
+                  borderRadius: 999,
+                  background: career.color,
+                }}
+                initial={{ width: 0 }}
+                animate={{ width: `${career.score}%` }}
+                transition={{ duration: 0.7, delay: 0.22 + index * 0.1, ease: "easeOut" }}
+              />
+            </div>
+            <div
+              className="phase-card-meta"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontSize: "0.74rem",
+                color: "var(--pf-home-hero-card-meta)",
+              }}
+            >
+              <span>Why it fits</span>
+              <span style={{ color: "var(--pf-home-hero-card-match)" }}>Match</span>
+            </div>
+            <div
+              className="phase-card-meta"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontSize: "0.74rem",
+                color: "var(--pf-home-hero-card-meta)",
+                marginTop: 4,
+              }}
+            >
+              <span>Salary</span>
+              <span style={{ color: "var(--pf-home-hero-card-salary)" }}>{career.salary}</span>
+            </div>
+            <div
+              className="phase-card-salary"
+              style={{
+                marginTop: 8,
+                fontSize: "0.72rem",
+                color: career.color,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Rank #{index + 1}
+            </div>
+          </div>
+        </motion.article>
+      ))}
+    </div>
+  );
+}
 
 interface PreviewMotifConfig {
   right: number;
@@ -282,7 +757,6 @@ function getTrackIcon(trackId: string) {
 
 export default function Home() {
   const reduceMotion = useReducedMotion();
-  const heroRef = useRef<HTMLElement>(null);
   const previousPreviewIndexRef = useRef(0);
   const nav = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -290,7 +764,7 @@ export default function Home() {
   const [tracks, setTracks] = useState<SponsorTrack[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<string>("tech-career");
   const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
-  const [heroWordIndex, setHeroWordIndex] = useState(0);
+  const [heroPhase, setHeroPhase] = useState<HeroPhase>("chaos");
   const [previewDirection, setPreviewDirection] = useState(1);
 
   useEffect(() => {
@@ -308,70 +782,23 @@ export default function Home() {
 
   useEffect(() => {
     if (reduceMotion) {
-      setHeroWordIndex(0);
+      setHeroPhase("clarity");
       return;
     }
 
-    let rotateTimeout: number | null = null;
-    const rotateInterval = window.setInterval(() => {
-      rotateTimeout = window.setTimeout(() => {
-        setHeroWordIndex((current) => (current + 1) % heroRotatorWords.length);
-      }, 130);
-    }, 2600);
+    const phaseTimer = window.setTimeout(() => {
+      setHeroPhase((current) => getNextPhase(current));
+    }, heroPhaseDurations[heroPhase]);
 
     return () => {
-      window.clearInterval(rotateInterval);
-      if (rotateTimeout !== null) {
-        window.clearTimeout(rotateTimeout);
-      }
+      window.clearTimeout(phaseTimer);
     };
-  }, [reduceMotion]);
+  }, [heroPhase, reduceMotion]);
 
-  useEffect(() => {
-    const hero = heroRef.current;
-    if (!hero || reduceMotion) return;
-
-    if (typeof window.matchMedia !== "function") return;
-
-    const desktopMedia = window.matchMedia("(min-width: 1024px)");
-    if (!desktopMedia.matches) return;
-
-    let rafId = 0;
-
-    const applyParallax = (x: number, y: number) => {
-      hero.style.setProperty("--pf-hero-parallax-x", `${x}px`);
-      hero.style.setProperty("--pf-hero-parallax-y", `${y}px`);
-    };
-
-    const handlePointerMove = (event: PointerEvent) => {
-      cancelAnimationFrame(rafId);
-      rafId = window.requestAnimationFrame(() => {
-        const rect = hero.getBoundingClientRect();
-        const normalizedX =
-          ((event.clientX - rect.left) / rect.width - 0.5) * 2;
-        const normalizedY =
-          ((event.clientY - rect.top) / rect.height - 0.5) * 2;
-
-        applyParallax(
-          Math.max(-12, Math.min(12, normalizedX * 12)),
-          Math.max(-10, Math.min(10, normalizedY * 10)),
-        );
-      });
-    };
-
-    const resetParallax = () => applyParallax(0, 0);
-
-    resetParallax();
-    hero.addEventListener("pointermove", handlePointerMove, { passive: true });
-    hero.addEventListener("pointerleave", resetParallax);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      hero.removeEventListener("pointermove", handlePointerMove);
-      hero.removeEventListener("pointerleave", resetParallax);
-      resetParallax();
-    };
-  }, [reduceMotion]);
+  function handleHeroAdvance() {
+    if (reduceMotion) return;
+    setHeroPhase((current) => getNextPhase(current));
+  }
 
   async function handleStart() {
     const homeState = deriveHomeStateContract({
@@ -387,7 +814,9 @@ export default function Home() {
     setError(null);
     try {
       const session = await createSession(selectedTrack);
-      nav(`/onboarding?session=${session.id}`);
+      nav(
+        `/onboarding?session=${session.id}&track=${encodeURIComponent(selectedTrack)}`,
+      );
     } catch {
       setLoading(false);
       setError(
@@ -441,153 +870,222 @@ export default function Home() {
     >
       <motion.section
         style={heroSection}
-        className="home-hero-panel"
-        ref={heroRef}
         initial={reduceMotion ? false : { opacity: 0, y: 14 }}
         animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
         transition={
           reduceMotion ? undefined : { duration: 0.36, ease: "easeOut" }
         }
       >
-        <div className="home-hero-backdrop" aria-hidden="true">
-          <motion.span
-            className="home-hero-glow home-hero-glow-a"
-            animate={
-              reduceMotion
-                ? undefined
-                : {
-                    x: [0, 16, -10, 0],
-                    y: [0, -10, 6, 0],
-                    scale: [1, 1.06, 0.96, 1],
-                  }
-            }
-            transition={
-              reduceMotion
-                ? undefined
-                : { duration: 14, repeat: Infinity, ease: "easeInOut" }
-            }
-          />
-          <motion.span
-            className="home-hero-glow home-hero-glow-b"
-            animate={
-              reduceMotion
-                ? undefined
-                : {
-                    x: [0, -14, 9, 0],
-                    y: [0, 8, -8, 0],
-                    scale: [1, 0.98, 1.08, 1],
-                  }
-            }
-            transition={
-              reduceMotion
-                ? undefined
-                : { duration: 16, repeat: Infinity, ease: "easeInOut" }
-            }
-          />
-        </div>
-        <div style={heroInner} className="home-hero-inner">
-          <p style={kicker}>{HOME_COPY.hero.kicker}</p>
-          <h1 style={heading} className="home-hero-title-accent">
-            {HOME_COPY.hero.heading}
-          </h1>
-          <div style={heroRotatorLine}>
-            <span>{HOME_COPY.hero.rotatorPrefix}</span>
-            {reduceMotion ? (
-              <span
-                style={{ color: "var(--pf-color-brand-400)", fontWeight: 700 }}
-              >
-                {heroRotatorWords[0]}
-              </span>
-            ) : (
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.span
-                  key={heroRotatorWords[heroWordIndex]}
-                  initial={{ y: 8, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: -8, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
-                  style={{
-                    color: "var(--pf-color-brand-400)",
-                    fontWeight: 700,
-                  }}
-                  aria-live="polite"
-                >
-                  {heroRotatorWords[heroWordIndex]}
-                </motion.span>
-              </AnimatePresence>
-            )}
-          </div>
-          <p style={sub}>{HOME_COPY.hero.subhead}</p>
+        <div style={heroBody}>
+          <motion.div
+            style={heroTagline}
+            initial={reduceMotion ? false : { opacity: 0, y: -10 }}
+            animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+            transition={reduceMotion ? undefined : { duration: 0.5, ease: "easeOut" }}
+          >
+            <Sparkles size={14} strokeWidth={2} aria-hidden="true" color="#9aa8ff" />
+            <span style={heroTaglineText}>{HOME_COPY.hero.kicker}</span>
+          </motion.div>
 
-          <div style={signalGrid}>
-            {heroSignals.map((signal, index) => (
+          <h1 style={heroTitle}>
+            <motion.span
+              key={`${heroPhase}-lead`}
+              className="home-hero-title-accent"
+              initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+              animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={reduceMotion ? undefined : { duration: 0.35, ease: "easeOut" }}
+              aria-live="polite"
+            >
+              {heroPhaseCopy[heroPhase].lead}
+            </motion.span>
+            <span className="home-hero-title-main">{heroPhaseCopy[heroPhase].title}</span>
+          </h1>
+
+          <motion.p
+            key={`${heroPhase}-sub`}
+            style={heroSubtitle}
+            initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+            animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+            transition={reduceMotion ? undefined : { duration: 0.3, ease: "easeOut" }}
+          >
+            {heroPhaseCopy[heroPhase].subtitle}
+          </motion.p>
+
+          <div style={phaseCanvas}>
+            <motion.span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                width: "38vmax",
+                height: "38vmax",
+                left: "-18vmax",
+                top: "-18vmax",
+                borderRadius: "50%",
+                background:
+                  "radial-gradient(circle, rgba(99, 102, 241, 0.32), rgba(99, 102, 241, 0) 66%)",
+                filter: "blur(22px)",
+              }}
+              animate={
+                reduceMotion
+                  ? undefined
+                  : { x: [0, 22, 0], y: [0, -16, 0], scale: [1, 1.08, 1] }
+              }
+              transition={
+                reduceMotion
+                  ? undefined
+                  : { duration: 11, repeat: Infinity, ease: "easeInOut" }
+              }
+            />
+            <motion.span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                width: "34vmax",
+                height: "34vmax",
+                right: "-14vmax",
+                bottom: "-16vmax",
+                borderRadius: "50%",
+                background:
+                  "radial-gradient(circle, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0) 68%)",
+                filter: "blur(24px)",
+              }}
+              animate={
+                reduceMotion
+                  ? undefined
+                  : { x: [0, -18, 0], y: [0, 12, 0], scale: [1, 1.06, 1] }
+              }
+              transition={
+                reduceMotion
+                  ? undefined
+                  : { duration: 13, repeat: Infinity, ease: "easeInOut" }
+              }
+            />
+            <motion.span
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                inset: 0,
+                opacity: 0.22,
+                backgroundImage:
+                  "linear-gradient(rgba(99, 102, 241, 0.16) 1px, transparent 1px), linear-gradient(90deg, rgba(99, 102, 241, 0.14) 1px, transparent 1px)",
+                backgroundSize: "48px 48px",
+                maskImage:
+                  "radial-gradient(circle at center, rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0))",
+              }}
+              animate={
+                reduceMotion
+                  ? undefined
+                  : { backgroundPosition: ["0px 0px", "48px 48px"] }
+              }
+              transition={
+                reduceMotion
+                  ? undefined
+                  : { duration: 24, repeat: Infinity, ease: "linear" }
+              }
+            />
+
+            <AnimatePresence mode="wait" initial={false}>
               <motion.div
-                key={signal.label}
-                style={signalCard}
-                initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-                animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+                key={heroPhase}
+                style={{ position: "absolute", inset: 0 }}
+                initial={reduceMotion ? false : { opacity: 0, scale: 0.985 }}
+                animate={reduceMotion ? undefined : { opacity: 1, scale: 1 }}
+                exit={reduceMotion ? undefined : { opacity: 0, scale: 1.01 }}
                 transition={
                   reduceMotion
                     ? undefined
-                    : { duration: 0.22, delay: 0.08 + index * 0.06 }
+                    : { duration: 0.42, ease: [0.22, 1, 0.36, 1] }
                 }
               >
-                <IconLabel
-                  icon={signal.icon}
-                  variant="compact"
-                  style={{
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.04em",
-                    fontSize: "0.72rem",
-                    marginBottom: 2,
-                  }}
-                >
-                  {signal.label}
-                </IconLabel>
-                <div
-                  style={{
-                    fontSize: "0.79rem",
-                    lineHeight: 1.45,
-                    color: "var(--pf-color-text-muted)",
-                  }}
-                >
-                  {signal.detail}
-                </div>
+                {heroPhase === "chaos" && (
+                  <ChaosVisualization
+                    reduceMotion={Boolean(reduceMotion)}
+                    onInteract={handleHeroAdvance}
+                  />
+                )}
+                {heroPhase === "organizing" && (
+                  <OrganizingVisualization reduceMotion={Boolean(reduceMotion)} />
+                )}
+                {heroPhase === "clarity" && (
+                  <ClarityVisualization reduceMotion={Boolean(reduceMotion)} />
+                )}
               </motion.div>
-            ))}
+            </AnimatePresence>
           </div>
 
-          <button
-            style={{ ...btn(!canStartAssessment), marginTop: 4 }}
-            onClick={handleStart}
-            disabled={!canStartAssessment}
-          >
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-              }}
+          <div style={heroFooter}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              {heroPhaseSequence.map((phase) => (
+                <button
+                  key={phase}
+                  className="phase-chip"
+                  type="button"
+                  style={phaseChip(phase === heroPhase)}
+                  onClick={() => setHeroPhase(phase)}
+                  aria-pressed={phase === heroPhase}
+                >
+                  {heroPhaseLabels[phase]}
+                </button>
+              ))}
+            </div>
+
+            <motion.button
+              type="button"
+              className="phase-cta"
+              style={{ ...btn(!canStartAssessment), position: "relative", overflow: "hidden" }}
+              onClick={handleStart}
+              disabled={!canStartAssessment}
+              whileHover={
+                reduceMotion || !canStartAssessment ? undefined : { scale: 1.03 }
+              }
+              whileTap={
+                reduceMotion || !canStartAssessment ? undefined : { scale: 0.97 }
+              }
             >
-              {loading ? (
-                <IconLabel icon={Activity} variant="cta">
-                  Creating session…
-                </IconLabel>
-              ) : (
-                <>
-                  <IconLabel icon={Sparkles} variant="cta">
-                    Start Assessment
+              <motion.span
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "linear-gradient(90deg, #6d74ff, #4ccfff)",
+                  opacity: loading ? 0 : 0.72,
+                  zIndex: 0,
+                }}
+                animate={
+                  reduceMotion || loading
+                    ? undefined
+                    : { x: ["-120%", "-18%", "0%", "0%", "120%"] }
+                }
+                transition={
+                  reduceMotion || loading
+                    ? undefined
+                    : { duration: 7.8, repeat: Infinity, ease: "easeInOut" }
+                }
+              />
+              <span
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                {loading ? (
+                  <IconLabel icon={Activity} variant="cta">
+                    Creating session…
                   </IconLabel>
-                  <ArrowRight
-                    size={ctaIcon.size}
-                    strokeWidth={ctaIcon.strokeWidth}
-                    aria-hidden="true"
-                  />
-                </>
-              )}
-            </span>
-          </button>
+                ) : (
+                  <>
+                    <IconLabel icon={Sparkles} variant="cta">
+                      Start Assessment
+                    </IconLabel>
+                    <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
+                  </>
+                )}
+              </span>
+            </motion.button>
+          </div>
 
           {error && (
             <p
@@ -595,12 +1093,31 @@ export default function Home() {
                 marginTop: 12,
                 fontSize: "0.875rem",
                 color: "var(--pf-color-danger-500)",
-                maxWidth: 400,
+                maxWidth: 420,
               }}
             >
               {error}
             </p>
           )}
+
+          <motion.div
+            className="home-hero-scroll-hint"
+            style={{
+              marginTop: 18,
+              textAlign: "center",
+              fontSize: "0.74rem",
+              color: "var(--pf-color-text-muted)",
+              letterSpacing: "0.04em",
+            }}
+            animate={reduceMotion ? undefined : { y: [0, 5, 0] }}
+            transition={
+              reduceMotion
+                ? undefined
+                : { duration: 2.1, repeat: Infinity, ease: "easeInOut" }
+            }
+          >
+            Scroll to explore tracks
+          </motion.div>
         </div>
       </motion.section>
 
@@ -924,7 +1441,7 @@ export default function Home() {
           }
         >
           <IconLabel
-            icon={Compass}
+            icon={Target}
             variant="compact"
             style={{ fontWeight: 700, marginBottom: 6 }}
             iconStyle={iconWrap}
@@ -946,7 +1463,7 @@ export default function Home() {
           }
         >
           <IconLabel
-            icon={Sparkles}
+            icon={Brain}
             variant="compact"
             style={{ fontWeight: 700, marginBottom: 6 }}
             iconStyle={iconWrap}
@@ -968,12 +1485,12 @@ export default function Home() {
           }
         >
           <IconLabel
-            icon={Briefcase}
+            icon={TrendingUp}
             variant="compact"
             style={{ fontWeight: 700, marginBottom: 6 }}
             iconStyle={iconWrap}
           >
-            Track-Specific Insights
+            Track-Aware Guidance
           </IconLabel>
           <p
             style={{ color: "var(--pf-color-text-muted)", fontSize: "0.85rem" }}

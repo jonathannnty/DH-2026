@@ -1,4 +1,4 @@
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { getSession, getRecommendations } from "@/lib/api";
 import { useSessionStream } from "@/hooks/useSessionStream";
@@ -165,6 +165,7 @@ function TrackBanner({ track }: { track: SponsorTrack }) {
 export default function Results() {
   const reduceMotion = useReducedMotion();
   const { sessionId } = useParams<{ sessionId: string }>();
+  const [searchParams] = useSearchParams();
   const nav = useNavigate();
 
   const [session, setSession] = useState<SessionResponse | null>(null);
@@ -213,12 +214,22 @@ export default function Results() {
 
     if (type === "complete" && sessionId) {
       if ((payload as { isFallback?: boolean }).isFallback) setIsFallback(true);
-      getRecommendations(sessionId)
-        .then(setRecs)
-        .catch(() => setRecs([]));
+
+      // Fetch session first so status is updated before recommendations are fetched.
+      // Then retry recommendations once with a 1.5s delay if the first attempt fails —
+      // guards against any residual timing skew between the SSE emit and DB visibility.
       getSession(sessionId)
         .then(setSession)
         .catch(() => {});
+
+      getRecommendations(sessionId)
+        .then(setRecs)
+        .catch(() =>
+          new Promise<void>((res) => setTimeout(res, 1500))
+            .then(() => getRecommendations(sessionId))
+            .then(setRecs)
+            .catch(() => setRecs([])),
+        );
     }
 
     if (type === "error") {
@@ -258,7 +269,13 @@ export default function Results() {
 
     // Redirect intake sessions back to the chat
     if (session.status === "intake" && sessionId) {
-      nav(`/onboarding?session=${sessionId}`, { replace: true });
+      const finalTrack = session.trackId ?? searchParams.get("track");
+      nav(
+        finalTrack
+          ? `/onboarding?session=${sessionId}&track=${encodeURIComponent(finalTrack)}`
+          : `/onboarding?session=${sessionId}`,
+        { replace: true },
+      );
     }
 
     // Surface analysis errors
@@ -267,7 +284,7 @@ export default function Results() {
         "This session encountered an error during analysis. You can start a new assessment or return to the dashboard.",
       );
     }
-  }, [session, recs, sessionId, nav]);
+  }, [session, recs, sessionId, nav, searchParams]);
 
   // ── No session ID param ──
   if (resultsState.viewState === "no-session") {
