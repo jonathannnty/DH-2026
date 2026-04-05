@@ -1,11 +1,12 @@
 # DH-2026
 
-React + Node monorepo starter, pre-configured so coding agents can run standard checks through root scripts.
+DiamondHacks 2026 career guidance platform with a React frontend, Fastify API, and a Python multi-agent service.
 
 ## Stack
 
 - Frontend: React + TypeScript + Vite workspace at `frontend`
 - Backend: Fastify + TypeScript workspace at `api`
+- Agent service: Python FastAPI service at repository root (`agent_service.py`)
 - Package manager: npm workspaces
 
 ## Repository Layout
@@ -25,18 +26,65 @@ React + Node monorepo starter, pre-configured so coding agents can run standard 
 npm install
 ```
 
+Python agent service setup:
+
+```bash
+pip install -r requirements.txt
+```
+
 ## Commands
 
 Run from repository root.
 
 ```bash
+npm run dev
 npm run build
 npm run test
 npm run lint
 ```
 
+## Demo Quick Start (Windows PowerShell)
+
+```powershell
+# Terminal 1
+python agent_service.py
+
+# Terminal 2
+.\demo-startup.ps1 -Scenario swe
+```
+
+This starts API + frontend, seeds a fake profile session, and opens the browser to a preloaded onboarding flow.
+
+## Testing
+
+```bash
+# Frontend tests
+npm run test --workspace frontend
+
+# API tests
+npm run test --workspace api
+```
+
+Optional test suites (off by default):
+
+```bash
+# Level 1 direct agent-service tests
+RUN_LEVEL1_AGENT_TESTS=true npm run test --workspace api -- agent-service-level-1.test.ts
+
+# Level 3 exploratory frontend E2E tests
+RUN_LEVEL3_E2E_TESTS=true npm run test --workspace frontend -- multi-agent-e2e.test.tsx
+```
+
 ## Notes
 
 - Root scripts delegate to workspace scripts so tooling can evolve without changing the agent entry points.
-- Update this README whenever build or test workflows change.
+- API default port is `3001`; Python agent service default is `8000`.
+- Update this README whenever build, test, or demo workflows change.
 - Backend lint currently runs TypeScript checks (`tsc --noEmit`).
+
+## Additional Documentation
+
+- Demo operations: `docs/operator-playbook.md`
+- Demo contingencies: `docs/demo-contingency-plan.md`
+- Quick testing guide: `TESTING_QUICK_START.md`
+- Detailed testing guide: `docs/TESTING.md`

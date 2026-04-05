@@ -1,132 +1,102 @@
-# Troubleshooting Level 2 Tests
+# Troubleshooting Integration Tests
 
-If Level 2 tests fail, use the diagnostic tool to identify the issue.
+Use this guide when API integration tests fail or local end-to-end behavior looks inconsistent.
 
-## Quick Start
+## Baseline Service Check
+
+Start core services in separate terminals:
 
 ```bash
-# Make sure all services are running
-# Terminal 1
+# Terminal 1 (agent service)
 python agent_service.py
 
-# Terminal 2
-cd api && npm run dev
-
-# Terminal 3
-npm run test:agents:level2:debug
+# Terminal 2 (API)
+cd api
+npm run dev
 ```
 
-## What The Diagnostic Test Does
+Expected defaults:
 
-1. **Checks backend health** - Verifies backend is running on :3000
-2. **Checks agent service** - Verifies agent service is running on :8000
-3. **Creates a session** - Tests POST /sessions
-4. **Sends messages** - Tests POST /sessions/{id}/messages
-5. **Triggers analysis** - Tests POST /sessions/{id}/analyze
-6. **Waits for completion** - Monitors analysis progress
+- API: `http://localhost:3001`
+- Agent service: `http://localhost:8000`
 
-## Common Issues & Solutions
+## Common Failures
 
-### Issue: "Backend not reachable"
-**Problem**: Backend isn't running or on wrong port
+### API not reachable
 
-**Solution**:
+Symptoms:
+
+- `curl http://localhost:3001/health` fails
+- API tests that need the running server fail
+
+Fix:
+
 ```bash
-cd api && npm run dev
-# Should show: listening on 0.0.0.0:3000
+cd api
+npm run dev
 ```
 
-### Issue: "Agent service health check returned 500"
-**Problem**: Agent service running but broken
+### Agent service unavailable
 
-**Solution**:
+Symptoms:
+
+- Session analyze calls return 5xx
+- API logs show upstream connectivity errors
+
+Fix:
+
 ```bash
-# Restart agent service
 python agent_service.py
-# Should show: Application startup complete
-```
-
-### Issue: "Failed to trigger analysis (status 500)"
-**Problem**: Backend can't reach agent service
-
-**Solutions**:
-1. Verify agent service is running on :8000
-2. Check backend can reach http://localhost:8000
-```bash
-# From backend terminal, try:
 curl http://localhost:8000/health
 ```
 
-3. Check AGENT_SERVICE_URL environment variable
-```bash
-# In backend, should default to http://localhost:8000
-echo $AGENT_SERVICE_URL
-```
+### Analyze flow stalls
 
-### Issue: "Analysis did not complete within 30 seconds"
-**Problem**: Analysis is taking too long or stuck
+Symptoms:
 
-**Solutions**:
-1. Check backend logs for errors
-2. Check agent service logs for errors
-3. Try again - might be first run overhead
-4. Monitor how long Level 1 takes:
-```bash
-npm run test:agents:level1
-# Note the time
-```
+- Session remains in `analyzing`
+- SSE stream does not progress
 
-5. If Level 1 takes too long, Level 2 will also
+Fix:
 
-## Manual Testing
+1. Confirm both services are healthy.
+2. Check API logs for errors while calling `/sessions/{id}/analyze`.
+3. Retry with a fresh session.
+4. In demo mode, use `/ops/force-status` for recovery if needed.
 
-If the diagnostic still fails, try manually:
+## Manual API Verification
 
 ```bash
 # Create session
-curl -X POST http://localhost:3000/sessions \
+curl -X POST http://localhost:3001/sessions \
   -H "Content-Type: application/json" \
   -d '{"trackId":null}'
 
-# Save the session ID, then:
-# Send message
-curl -X POST http://localhost:3000/sessions/{SESSION_ID}/messages \
+# Send intake message
+curl -X POST http://localhost:3001/sessions/{SESSION_ID}/messages \
   -H "Content-Type: application/json" \
-  -d '{"content":"I like AI"}'
+  -d '{"content":"I like AI and product design"}'
 
 # Trigger analysis
-curl -X POST http://localhost:3000/sessions/{SESSION_ID}/analyze
+curl -X POST http://localhost:3001/sessions/{SESSION_ID}/analyze
 
-# Check status
-curl http://localhost:3000/sessions/{SESSION_ID}
+# Fetch current session state
+curl http://localhost:3001/sessions/{SESSION_ID}
 ```
 
-## Success Indicators
+## Test Commands
 
-✅ **Level 2 Diagnostic Passes**
-- Backend healthy
-- Agent service healthy
-- Session created
-- Messages accepted
-- Analysis triggered
-- Analysis completes to status: 'results'
-
-## Run Full Test Suite
-
-Once diagnostic passes:
+Use the current workspace commands:
 
 ```bash
-# Run all tests
-npm run test:agents
-
-# Expected output:
-# Level 1: PASS (agent coordination)
-# Level 2: PASS (backend integration)
-# Level 3: MANUAL (frontend testing)
+npm run test
+npm run build
+npm run lint
 ```
 
-## Need More Help?
+Optional exploratory suites remain gated behind environment flags (see `docs/TESTING.md`).
 
-Check the full documentation: `docs/TESTING.md`
+## Related Docs
 
-Or check the Python diagnostic script: `scripts/test-agents-level2-debug.py`
+- `docs/TESTING.md`
+- `docs/operator-playbook.md`

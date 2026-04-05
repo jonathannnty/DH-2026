@@ -146,7 +146,7 @@ If `http://localhost:8000/health` fails:
 | `/ready` shows DB fail       | SQLite locked or missing              | Delete `api/dev.db`, restart                 |
 | Session stuck in `analyzing` | Demo mode SSE not triggered           | `force-status` to `complete`, or reset       |
 | Frontend shows blank         | API not running                       | Check `http://localhost:3001/health`         |
-| 403 on /ops/\* routes        | `DEMO_MODE` not set                   | Restart with `DEMO_MODE=true`                |
+| Unexpected warning on `/ops` | Ops used while not in demo mode       | Expected warning log only; routes still work |
 | Recommendations empty        | Session wasn't streamed after analyze | Navigate to `/results/<id>` — it will stream |
 
 ---

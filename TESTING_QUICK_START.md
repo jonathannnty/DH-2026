@@ -1,140 +1,111 @@
 # Testing Multi-Agent System - Quick Start
 
-## 🎯 TL;DR: Test All 3 Levels in 5 Minutes
+## TL;DR: Validate in 5 minutes
 
-### Step 1: Start Services (4 terminals)
+### 1) Start required services
 
 ```bash
-# Terminal 1: Agent Service
+# Terminal 1: Python agent service
 python agent_service.py
 
-# Terminal 2: Backend
-cd api && npm run dev
-
-# Terminal 3: Frontend (optional)
-cd frontend && npm run dev
-
-# Terminal 4: Run Tests
-npm run test:agents
+# Terminal 2: Backend API (port 3001)
+npm run dev --workspace api
 ```
 
-## 📋 What Gets Tested
-
-### Level 1 ✓ Agent Service
-**Files**: `api/src/__tests__/agent-service-level-1.test.ts`
-
-Tests the agent service in isolation:
-- All 4 agents registered?
-- Do they run in order: research → profile → recommendations (with validation) → report?
-- Does progress go from 0% → 100%?
-- Does each agent produce output?
+Optional:
 
 ```bash
-npm run test:agents:level1
+# Terminal 3: Frontend UI (port 5173)
+npm run dev --workspace frontend
 ```
 
-### Level 2 ✓ Backend Integration
-**Files**: `api/src/__tests__/agent-service-level-2.test.ts`
-
-Tests backend orchestration with agents:
-- Backend creates sessions?
-- Collects profile from intake messages?
-- Triggers agent service correctly?
-- Stores results?
-- Handles state transitions?
+### 2) Run core test suites
 
 ```bash
-npm run test:agents:level2
+# Frontend tests
+npm run test --workspace frontend
+
+# API tests
+npm run test --workspace api
 ```
 
-### Level 3 ✓ Frontend E2E
-**Files**: `frontend/src/__tests__/multi-agent-e2e.test.tsx`
+## Test Levels
 
-Tests complete user journey:
-- Can user complete onboarding?
-- Does analysis start?
-- Do results display?
-- Can user see recommendations?
+### Level 1: Agent service direct tests (optional, gated)
+
+File: `api/src/__tests__/agent-service-level-1.test.ts`
 
 ```bash
-# Automated
-cd frontend && npm run test -- multi-agent-e2e.test.tsx
-
-# Manual
-open http://localhost:5173
-# Follow onboarding → analysis → results
+RUN_LEVEL1_AGENT_TESTS=true npm run test --workspace api -- agent-service-level-1.test.ts
 ```
 
-## 🚀 Run Everything
+Checks:
+
+- Agent health and registration
+- 4-agent execution sequence
+- Progress and output shape
+
+### Level 2: Backend integration tests
+
+Files include:
+
+- `api/src/__tests__/agent-service-level-2.test.ts`
+- `api/src/__tests__/golden-path.test.ts`
+- `api/src/__tests__/contracts.test.ts`
+- `api/src/__tests__/demo-golden-path.test.ts`
 
 ```bash
-# All unit tests (api + frontend)
-npm run test
-
-# All agent coordination tests
-npm run test:agents
-
-# Everything
-npm run test:all
+npm run test --workspace api
 ```
 
-## 🔍 Individual Tests
+Checks:
+
+- Session and intake flow
+- Analysis trigger and state transitions
+- SSE and recommendations contract
+- Report generation endpoint
+
+### Level 3: Frontend exploratory E2E tests (optional, gated)
+
+File: `frontend/src/__tests__/multi-agent-e2e.test.tsx`
 
 ```bash
-# Test just agent service directly
-npm run test:agents:level1
-
-# Test backend with agent service
-npm run test:agents:level2
-
-# Manual Level 3 test
-# (Open browser, click through UI)
+RUN_LEVEL3_E2E_TESTS=true npm run test --workspace frontend -- multi-agent-e2e.test.tsx
 ```
 
-## ✅ Success Checklist
+Notes:
 
-After running all tests, verify:
+- Skipped by default for stability.
+- Use when you want deeper exploratory end-to-end coverage.
 
-- [ ] Level 1: Agents execute in correct order (0% → 100%)
-- [ ] Level 2: Backend creates session and triggers agents
-- [ ] Level 3: Frontend shows onboarding → analysis → results
-- [ ] All tests pass with no errors
-- [ ] No console errors (F12 in browser)
+## Sanity checklist
 
-## 🛠️ Troubleshooting
+- [ ] `npm run build` passes
+- [ ] `npm run lint` passes
+- [ ] `npm run test --workspace frontend` passes
+- [ ] `npm run test --workspace api` passes
 
-**Agent service won't start?**
+## Troubleshooting
+
+Agent service unreachable:
+
 ```bash
-pip install -r requirements.txt
-python agent_service.py
+curl http://localhost:8000/health
 ```
 
-**Tests won't run?**
+API not responding:
+
+```bash
+curl http://localhost:3001/health
+```
+
+If dependencies are missing:
+
 ```bash
 npm install
-cd api && npm install
-cd frontend && npm install
+pip install -r requirements.txt
 ```
-
-**Agent service won't connect from backend?**
-```bash
-# Check agent service is running
-curl http://localhost:8000/health
-
-# Check port 8000 is available
-lsof -i :8000
-```
-
-## 📊 Expected Results
-
-| Level | Expected Time | What Passes? |
-|-------|---------------|--------------|
-| Level 1 | 5-15s | All 4 agents run sequentially |
-| Level 2 | 10-20s | Backend properly orchestrates |
-| Level 3 | 30-60s | Full UI flow works |
 
 ---
 
-## 📚 Full Documentation
-
-For detailed testing guide, see: [`docs/TESTING.md`](./docs/TESTING.md)
+For full details, see `docs/TESTING.md`.
