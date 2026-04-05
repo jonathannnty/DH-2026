@@ -113,9 +113,30 @@ playwright install
 export AGENT_SERVICE_URL=http://localhost:8000
 export AGENT_PORT=8000
 
+# Agentverse bridge (local uAgents -> Agentverse)
+export ENABLE_AGENTVERSE_LINK=true
+export AGENTVERSE_MAILBOX_ENABLED=true
+export AGENTVERSE_NETWORK=mainnet
+export AGENTVERSE_BASE_SEED=replace-with-a-unique-seed-prefix
+export AGENTVERSE_BASE_PORT=8100
+export AGENTVERSE_BUREAU_PORT=8300
+export AGENTVERSE_ENDPOINT_HOST=127.0.0.1
+export AGENTVERSE_ENABLE_CHAT_PROTOCOL=true
+export AGENTVERSE_USE_BUREAU=false
+
 # LLM Providers (optional, for advanced features)
 export OPENAI_API_KEY=sk_...
 export BROWSER_USE_API_KEY=bu_...
+```
+
+Optional: override deterministic seeds per role (otherwise they are derived from `AGENTVERSE_BASE_SEED`):
+
+```bash
+export AGENTVERSE_SEED_RESEARCH=...
+export AGENTVERSE_SEED_PROFILE_ANALYSIS=...
+export AGENTVERSE_SEED_RECOMMENDATIONS=...
+export AGENTVERSE_SEED_VERIFICATION=...
+export AGENTVERSE_SEED_REPORT_GENERATION=...
 ```
 
 ### 4. Start Agent Service
@@ -124,6 +145,23 @@ python agent_service.py
 ```
 
 The service will start on `http://localhost:8000` and automatically initialize all 5 agents.
+
+When `ENABLE_AGENTVERSE_LINK=true`, the same process also starts 5 local uAgents (one per role) and links them to Agentverse via mailbox mode.
+
+### 4.1 Connect each local agent in Agentverse Inspector
+
+After startup, check logs for each role agent's inspector URL (`https://agentverse.ai/inspect/?uri=...&address=...`).
+
+1. Open each inspector URL.
+2. Click **Connect**.
+3. Select **Mailbox**.
+4. Click **Finish**.
+
+Once connected, each role agent is discoverable as an active local Agentverse-linked agent while the process is running.
+
+Each role agent also publishes an Agent Chat Protocol manifest (when `AGENTVERSE_ENABLE_CHAT_PROTOCOL=true`) so it can be queried via standard chat-protocol flows and ASI-compatible tooling.
+
+`AGENTVERSE_USE_BUREAU=false` runs each role agent on its own localhost port (recommended for Inspector). Set it to `true` only if you explicitly want Bureau multiplexing.
 
 ### 5. Run Backend API
 ```bash

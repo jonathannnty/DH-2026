@@ -8,10 +8,34 @@ import sys
 import json
 import asyncio
 import logging
+import threading
+from uuid import uuid4
 from typing import Optional, Any
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+try:
+    from uagents import Agent as UAgent
+    from uagents import Bureau, Context, Protocol
+except ImportError:
+    UAgent = None  # Optional dependency
+    Bureau = None
+    Context = None
+    Protocol = None
+try:
+    from uagents_core.contrib.protocols.chat import (
+        ChatAcknowledgement,
+        ChatMessage,
+        EndSessionContent,
+        TextContent,
+        chat_protocol_spec,
+    )
+except ImportError:
+    ChatAcknowledgement = None
+    ChatMessage = None
+    EndSessionContent = None
+    TextContent = None
+    chat_protocol_spec = None
 try:
     from browser_use_sdk import Agent as BrowserAgent
 except ImportError:
@@ -20,6 +44,208 @@ except ImportError:
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# ==================== Agentverse Bridge Config ====================
+
+def _is_truthy(value: Optional[str], default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+ENABLE_AGENTVERSE_LINK = _is_truthy(os.getenv("ENABLE_AGENTVERSE_LINK"), default=False)
+# Mailbox must stay enabled for Agentverse connection flow on all five role agents.
+AGENTVERSE_MAILBOX_ENABLED = True
+AGENTVERSE_PUBLISH_DETAILS = _is_truthy(os.getenv("AGENTVERSE_PUBLISH_DETAILS"), default=True)
+AGENTVERSE_CONCURRENT_HANDLERS = _is_truthy(os.getenv("AGENTVERSE_CONCURRENT_HANDLERS"), default=False)
+AGENTVERSE_ENABLE_CHAT_PROTOCOL = _is_truthy(os.getenv("AGENTVERSE_ENABLE_CHAT_PROTOCOL"), default=True)
+AGENTVERSE_USE_BUREAU = _is_truthy(os.getenv("AGENTVERSE_USE_BUREAU"), default=False)
+AGENTVERSE_NETWORK = os.getenv("AGENTVERSE_NETWORK", "mainnet")
+AGENTVERSE_BUREAU_PORT = int(os.getenv("AGENTVERSE_BUREAU_PORT", "8300"))
+AGENTVERSE_BASE_PORT = int(os.getenv("AGENTVERSE_BASE_PORT", "8100"))
+AGENTVERSE_ENDPOINT_HOST = os.getenv("AGENTVERSE_ENDPOINT_HOST", "127.0.0.1")
+AGENTVERSE_BASE_SEED = os.getenv("AGENTVERSE_BASE_SEED", "dh2026-pathfinder-agent")
+
+ROLE_TO_AGENT_NAME = {
+    "research": "pathfinder-research",
+    "profile_analysis": "pathfinder-profile-analysis",
+    "recommendations": "pathfinder-recommendations",
+    "verification": "pathfinder-verification",
+    "report_generation": "pathfinder-report-generation",
+}
+
+
+def _add_chat_protocol(agent: UAgent, role: str) -> None:
+    """Attach standard Agent Chat Protocol handlers for ASI/Agentverse compatibility."""
+    if not AGENTVERSE_ENABLE_CHAT_PROTOCOL:
+        return
+
+    if (
+        Protocol is None
+        or chat_protocol_spec is None
+        or ChatMessage is None
+        or ChatAcknowledgement is None
+        or TextContent is None
+        or EndSessionContent is None
+    ):
+        logger.warning("Chat protocol dependencies unavailable; skipping manifest publish for role=%s", role)
+        return
+
+    chat_protocol = Protocol(spec=chat_protocol_spec)
+
+    @chat_protocol.on_message(ChatMessage)
+    async def _handle_chat_message(ctx: Context, sender: str, msg: ChatMessage):
+        await ctx.send(
+            sender,
+            ChatAcknowledgement(
+                timestamp=datetime.utcnow(),
+                acknowledged_msg_id=msg.msg_id,
+            ),
+        )
+
+        incoming_text = ""
+        for item in msg.content:
+            if isinstance(item, TextContent):
+                incoming_text += f"{item.text} "
+
+        incoming_text = incoming_text.strip() or "(no text provided)"
+        reply_text = (
+            f"[{role}] PathFinder agent is online on Agentverse mailbox. "
+            f"Received: {incoming_text}. "
+            "For full career workflow, call the FastAPI /analyze endpoint."
+        )
+
+        await ctx.send(
+            sender,
+            ChatMessage(
+                timestamp=datetime.utcnow(),
+                msg_id=uuid4(),
+                content=[
+                    TextContent(type="text", text=reply_text),
+                    EndSessionContent(type="end-session"),
+                ],
+            ),
+        )
+
+    @chat_protocol.on_message(ChatAcknowledgement)
+    async def _handle_chat_ack(ctx: Context, sender: str, msg: ChatAcknowledgement):
+        ctx.logger.info(
+            "Role '%s' received ack from %s for msg %s",
+            role,
+            sender,
+            msg.acknowledged_msg_id,
+        )
+
+    agent.include(chat_protocol, publish_manifest=True)
+
+
+def _build_agentverse_agents() -> list:
+    """Create one uAgent per role so each local agent can connect to Agentverse."""
+    if UAgent is None:
+        logger.warning("uagents not installed; skipping Agentverse bridge startup")
+        return []
+
+    created_agents = []
+    for index, (role, agent_name) in enumerate(ROLE_TO_AGENT_NAME.items(), start=1):
+        port = AGENTVERSE_BASE_PORT + index
+        endpoint = f"http://{AGENTVERSE_ENDPOINT_HOST}:{port}/submit"
+        role_seed_env = f"AGENTVERSE_SEED_{role.upper()}"
+        seed = os.getenv(role_seed_env, f"{AGENTVERSE_BASE_SEED}-{role}")
+
+        agent_kwargs = {
+            "name": agent_name,
+            "seed": seed,
+            "port": port,
+            "mailbox": AGENTVERSE_MAILBOX_ENABLED,
+            "network": AGENTVERSE_NETWORK,
+            "description": f"PathFinder role agent: {role}",
+            "publish_agent_details": AGENTVERSE_PUBLISH_DETAILS,
+            "readme_path": "README.md",
+            "handle_messages_concurrently": AGENTVERSE_CONCURRENT_HANDLERS,
+        }
+
+        # endpoint + mailbox together causes endpoint to win; only set endpoint when mailbox is off.
+        if not AGENTVERSE_MAILBOX_ENABLED:
+            agent_kwargs["endpoint"] = [endpoint]
+
+        if not AGENTVERSE_USE_BUREAU:
+            agent_kwargs["loop"] = asyncio.new_event_loop()
+
+        agent = UAgent(**agent_kwargs)
+
+        @agent.on_event("startup")
+        async def _on_startup(ctx: Context, role_name: str = role, local_endpoint: str = endpoint):
+            ctx.logger.info(
+                "PathFinder role '%s' linked to Agentverse (endpoint=%s)",
+                role_name,
+                local_endpoint,
+            )
+
+        _add_chat_protocol(agent, role)
+
+        created_agents.append(agent)
+
+    return created_agents
+
+
+def start_agentverse_bridge() -> Optional[threading.Thread]:
+    """Start all five local role agents for Agentverse linking."""
+    if not ENABLE_AGENTVERSE_LINK:
+        logger.info("Agentverse bridge disabled (set ENABLE_AGENTVERSE_LINK=true to enable)")
+        return None
+
+    if Bureau is None:
+        logger.warning("Cannot start Agentverse bridge because uagents is unavailable")
+        return None
+
+    agents = _build_agentverse_agents()
+    if not agents:
+        return None
+
+    if not AGENTVERSE_USE_BUREAU:
+        def _run_single(agent: UAgent) -> None:
+            try:
+                agent.run()
+            except Exception as exc:
+                logger.exception("Role agent '%s' stopped unexpectedly: %s", agent.name, exc)
+
+        logger.info(
+            "Starting Agentverse bridge for %d agents on network=%s (mailbox=%s, mode=independent)",
+            len(agents),
+            AGENTVERSE_NETWORK,
+            AGENTVERSE_MAILBOX_ENABLED,
+        )
+
+        for agent in agents:
+            thread = threading.Thread(
+                target=_run_single,
+                args=(agent,),
+                name=f"agentverse-{agent.name}",
+                daemon=True,
+            )
+            thread.start()
+
+        return None
+
+    bureau = Bureau(agents=agents, network=AGENTVERSE_NETWORK, port=AGENTVERSE_BUREAU_PORT)
+
+    def _run_bureau() -> None:
+        try:
+            logger.info(
+                "Starting Agentverse bridge for %d agents on network=%s (mailbox=%s, bureau_port=%s)",
+                len(agents),
+                AGENTVERSE_NETWORK,
+                AGENTVERSE_MAILBOX_ENABLED,
+                AGENTVERSE_BUREAU_PORT,
+            )
+            bureau.run()
+        except Exception as exc:
+            logger.exception("Agentverse bridge stopped unexpectedly: %s", exc)
+
+    thread = threading.Thread(target=_run_bureau, name="agentverse-bureau", daemon=True)
+    thread.start()
+    return thread
 
 # Initialize FastAPI app
 app = FastAPI(title="Multi-Agent Career Service")
@@ -180,40 +406,194 @@ class RecommendationAgent:
         
         try:
             profile = context.profile
-            interests = profile.get("interests", [])
-            values = profile.get("values", [])
-            
-            # Generate recommendations
-            recommendations = {
-                "top_career_paths": [
+            interests = [str(item).lower() for item in profile.get("interests", [])]
+            values = [str(item).lower() for item in profile.get("values", [])]
+            hard_skills = [str(item).lower() for item in profile.get("hardSkills", [])]
+            soft_skills = [str(item).lower() for item in profile.get("softSkills", [])]
+            track_id = (context.trackId or "general").lower()
+
+            def has_any(items: list[str], needles: list[str]) -> bool:
+                return any(any(needle in item for needle in needles) for item in items)
+
+            def score(base: float, boosts: list[tuple[bool, float]]) -> float:
+                return round(min(0.97, sum(boost for cond, boost in boosts if cond) + base), 2)
+
+            def salary(low_k: int, high_k: int) -> str:
+                return f"${low_k}K-${high_k}K"
+
+            common_remote = any("remote" in str(profile.get("geographicFlexibility", "")).lower() for _ in [0])
+            autonomy = "autonomy" in values
+            impact = any(v in values for v in ["social impact", "impact"])
+            creative = has_any(interests + hard_skills, ["creative", "music", "design", "art", "video"])
+            health = has_any(interests + hard_skills, ["health", "medical", "clinical", "bio", "fhir", "ehr"])
+            tech = has_any(interests + hard_skills, ["ai", "ml", "machine learning", "python", "typescript", "cloud", "data", "kubernetes"])
+
+            if track_id == "tech-career" or tech:
+                paths = [
                     {
-                        "title": "Software Engineer",
-                        "alignment_score": 0.95,
-                        "reasoning": "Strong match with technical interests",
-                        "avg_salary": "$120K",
-                        "growth_potential": "High"
+                        "title": "Staff Software Engineer — AI Platform",
+                        "alignment_score": score(0.83, [
+                            (has_any(hard_skills, ["python", "typescript", "cloud", "kubernetes"]), 0.08),
+                            (tech, 0.04),
+                            (common_remote, 0.02),
+                            (autonomy, 0.02),
+                        ]),
+                        "reasoning": "Your technical skills map directly to platform and infrastructure roles.",
+                        "avg_salary": salary(180, 300),
+                        "growth_potential": "High",
                     },
                     {
-                        "title": "Product Manager",
-                        "alignment_score": 0.87,
-                        "reasoning": "Good fit for leadership and problem-solving",
-                        "avg_salary": "$130K",
-                        "growth_potential": "High"
+                        "title": "ML / AI Engineer — Applied Products",
+                        "alignment_score": score(0.8, [
+                            (has_any(hard_skills, ["python", "ml", "machine learning", "data"]), 0.1),
+                            (has_any(interests, ["ai", "machine learning", "data"]), 0.04),
+                            (impact, 0.02),
+                        ]),
+                        "reasoning": "Strong match for AI-focused products and data-driven work.",
+                        "avg_salary": salary(170, 290),
+                        "growth_potential": "Very High",
+                    },
+                    {
+                        "title": "Technical Product Manager — AI Products",
+                        "alignment_score": score(0.74, [
+                            (has_any(soft_skills, ["communication", "leadership", "mentoring"]), 0.08),
+                            (impact, 0.03),
+                            (autonomy, 0.02),
+                        ]),
+                        "reasoning": "A strong option if you want strategy and ownership without leaving the technical orbit.",
+                        "avg_salary": salary(150, 250),
+                        "growth_potential": "High",
+                    },
+                ]
+                next_steps = [
+                    "Build one portfolio project that demonstrates your strongest technical stack.",
+                    "Tailor your resume to platform, AI, and product keywords.",
+                    "Target hiring teams at engineering-led companies and AI product orgs.",
+                ]
+            elif track_id == "healthcare-pivot" or health:
+                paths = [
+                    {
+                        "title": "Clinical Informatics Engineer",
+                        "alignment_score": score(0.82, [
+                            (has_any(hard_skills, ["python", "data", "sql", "analytics"]), 0.07),
+                            (health, 0.06),
+                            (impact, 0.02),
+                        ]),
+                        "reasoning": "A strong fit for healthcare systems, data workflows, and mission-driven work.",
+                        "avg_salary": salary(110, 180),
+                        "growth_potential": "High",
+                    },
+                    {
+                        "title": "Health AI Specialist",
+                        "alignment_score": score(0.79, [
+                            (has_any(hard_skills, ["python", "ml", "data", "ai"]), 0.1),
+                            (health, 0.05),
+                            (impact, 0.03),
+                        ]),
+                        "reasoning": "Ideal if you want to combine AI skills with clinical or health-tech impact.",
+                        "avg_salary": salary(125, 210),
+                        "growth_potential": "Very High",
+                    },
+                    {
+                        "title": "Healthcare Data Analyst",
+                        "alignment_score": score(0.73, [
+                            (has_any(hard_skills, ["data", "sql", "analytics"]), 0.09),
+                            (health, 0.05),
+                            (common_remote, 0.02),
+                        ]),
+                        "reasoning": "Accessible entry point into healthcare with strong analytical demand.",
+                        "avg_salary": salary(95, 155),
+                        "growth_potential": "High",
+                    },
+                ]
+                next_steps = [
+                    "Learn the basics of HL7 FHIR and healthcare data interoperability.",
+                    "Build one project using a public clinical or health dataset.",
+                    "Target health-tech vendors, health systems, and clinical data teams.",
+                ]
+            elif track_id == "creative-industry" or creative:
+                paths = [
+                    {
+                        "title": "Creative Technologist — AI Tools",
+                        "alignment_score": score(0.81, [
+                            (has_any(hard_skills, ["typescript", "javascript", "python", "react"]), 0.07),
+                            (creative, 0.06),
+                            (autonomy, 0.03),
+                        ]),
+                        "reasoning": "Strong fit for interactive experiences, design tools, and creative AI products.",
+                        "avg_salary": salary(100, 170),
+                        "growth_potential": "High",
+                    },
+                    {
+                        "title": "AI Content / Media Engineer",
+                        "alignment_score": score(0.78, [
+                            (has_any(hard_skills, ["python", "javascript", "typescript", "ai"]), 0.08),
+                            (creative, 0.05),
+                            (impact, 0.02),
+                        ]),
+                        "reasoning": "Well suited for generative media, tooling, and creative workflow automation.",
+                        "avg_salary": salary(95, 165),
+                        "growth_potential": "Very High",
+                    },
+                    {
+                        "title": "Developer Advocate — Creative Platforms",
+                        "alignment_score": score(0.71, [
+                            (has_any(soft_skills, ["communication", "mentoring", "creativity"]), 0.1),
+                            (creative, 0.04),
+                            (common_remote, 0.02),
+                        ]),
+                        "reasoning": "Good if you want to pair technical depth with teaching and community work.",
+                        "avg_salary": salary(110, 160),
+                        "growth_potential": "High",
+                    },
+                ]
+                next_steps = [
+                    "Publish a portfolio project that combines code with a creative output.",
+                    "Showcase your work publicly with demos, clips, or case studies.",
+                    "Target creative tooling, media, and design-platform companies.",
+                ]
+            else:
+                paths = [
+                    {
+                        "title": "Software Engineer",
+                        "alignment_score": score(0.8, [
+                            (has_any(hard_skills, ["python", "typescript", "javascript", "cloud", "data"]), 0.08),
+                            (common_remote, 0.03),
+                        ]),
+                        "reasoning": "A broad role that fits most technical backgrounds and keeps your options open.",
+                        "avg_salary": salary(120, 180),
+                        "growth_potential": "High",
                     },
                     {
                         "title": "Data Scientist",
-                        "alignment_score": 0.82,
-                        "reasoning": "Matches analytical interests",
-                        "avg_salary": "$115K",
-                        "growth_potential": "Very High"
-                    }
-                ],
-                "next_steps": [
-                    "Complete AWS Solutions Architect certification",
-                    "Build portfolio projects on GitHub",
-                    "Network with industry professionals",
-                    "Consider internship/contract roles"
-                ],
+                        "alignment_score": score(0.76, [
+                            (has_any(hard_skills, ["data", "python", "ml", "sql"]), 0.1),
+                            (has_any(interests, ["ai", "data", "research"]), 0.04),
+                        ]),
+                        "reasoning": "Great if your profile leans analytical or AI-focused.",
+                        "avg_salary": salary(115, 175),
+                        "growth_potential": "Very High",
+                    },
+                    {
+                        "title": "Product Manager",
+                        "alignment_score": score(0.7, [
+                            (has_any(soft_skills, ["communication", "leadership", "mentoring"]), 0.1),
+                            (impact, 0.03),
+                        ]),
+                        "reasoning": "A strong cross-functional path if leadership and coordination energize you.",
+                        "avg_salary": salary(130, 200),
+                        "growth_potential": "High",
+                    },
+                ]
+                next_steps = [
+                    "Strengthen one portfolio project that best matches your main technical signal.",
+                    "Update your resume so the top skills appear in the first third of the page.",
+                    "Apply to roles that match your strongest interests and track direction.",
+                ]
+
+            recommendations = {
+                "top_career_paths": paths[:3],
+                "next_steps": next_steps,
                 "learning_resources": [
                     {
                         "type": "Online Course",
@@ -504,5 +884,6 @@ async def list_agents() -> dict:
 
 if __name__ == "__main__":
     import uvicorn
+    start_agentverse_bridge()
     port = int(os.getenv("AGENT_PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
