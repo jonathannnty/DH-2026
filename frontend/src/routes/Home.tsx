@@ -174,8 +174,9 @@ const trackPreviewShell: React.CSSProperties = {
 
 const features: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-  gap: 16,
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: 20,
+  alignItems: "stretch",
   maxWidth: 1020,
   margin: "26px auto 0",
   width: "100%",
@@ -185,8 +186,16 @@ const card: React.CSSProperties = {
   background: "var(--pf-surface-card-bg)",
   border: "1px solid var(--pf-surface-card-border)",
   borderRadius: "var(--pf-radius-md)",
-  padding: "20px 18px",
+  padding: 20,
+  height: "100%",
+  minHeight: 238,
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1.3fr) minmax(230px, 0.7fr)",
+  gap: 24,
+  alignItems: "stretch",
   textAlign: "left",
+  overflow: "hidden",
+  position: "relative",
 };
 
 const iconWrap: React.CSSProperties = {
@@ -198,6 +207,369 @@ const iconWrap: React.CSSProperties = {
   borderRadius: "50%",
   background: "color-mix(in srgb, var(--pf-color-brand-500) 14%, transparent)",
 };
+
+type FeatureMotifKind = "profile" | "ranking" | "route";
+
+type FeatureCardModel = {
+  title: string;
+  summary: string;
+  explanation: string;
+  motifLabel: string;
+  motifKind: FeatureMotifKind;
+  icon: typeof Target;
+  accent: string;
+};
+
+const featureCards: FeatureCardModel[] = [
+  {
+    title: HOME_COPY.features.cards.dimensionProfile.title,
+    summary: HOME_COPY.features.cards.dimensionProfile.summary,
+    explanation: HOME_COPY.features.cards.dimensionProfile.explanation,
+    motifLabel: HOME_COPY.features.cards.dimensionProfile.motifLabel,
+    motifKind: "profile",
+    icon: Target,
+    accent: "var(--pf-color-brand-500)",
+  },
+  {
+    title: HOME_COPY.features.cards.aiScoredMatches.title,
+    summary: HOME_COPY.features.cards.aiScoredMatches.summary,
+    explanation: HOME_COPY.features.cards.aiScoredMatches.explanation,
+    motifLabel: HOME_COPY.features.cards.aiScoredMatches.motifLabel,
+    motifKind: "ranking",
+    icon: Brain,
+    accent: "#818cf8",
+  },
+  {
+    title: HOME_COPY.features.cards.trackInsights.title,
+    summary: HOME_COPY.features.cards.trackInsights.summary,
+    explanation: HOME_COPY.features.cards.trackInsights.explanation,
+    motifLabel: HOME_COPY.features.cards.trackInsights.motifLabel,
+    motifKind: "route",
+    icon: TrendingUp,
+    accent: "#34d399",
+  },
+];
+
+const featureCardCopy: React.CSSProperties = {
+  display: "grid",
+  gap: 14,
+  alignContent: "start",
+  minWidth: 0,
+};
+
+const featureCardSummary: React.CSSProperties = {
+  color: "var(--pf-color-text)",
+  fontSize: "0.95rem",
+  lineHeight: 1.7,
+  marginBottom: 0,
+};
+
+const featureCardExplanation: React.CSSProperties = {
+  color: "var(--pf-color-text-muted)",
+  fontSize: "0.88rem",
+  lineHeight: 1.72,
+  marginBottom: 0,
+};
+
+const featureCardMotif: React.CSSProperties = {
+  position: "relative",
+  borderRadius: "calc(var(--pf-radius-md) - 2px)",
+  border: "1px solid color-mix(in srgb, var(--pf-color-brand-500) 14%, var(--pf-surface-card-border))",
+  background:
+    "linear-gradient(180deg, color-mix(in srgb, var(--pf-color-brand-500) 7%, transparent), color-mix(in srgb, var(--pf-color-bg-subtle) 72%, transparent))",
+  minHeight: 216,
+  overflow: "hidden",
+  display: "flex",
+  alignItems: "stretch",
+  justifyContent: "stretch",
+};
+
+const featureCardMotifLabel: React.CSSProperties = {
+  position: "absolute",
+  top: 12,
+  left: 12,
+  zIndex: 2,
+  padding: "6px 10px",
+  borderRadius: "var(--pf-radius-pill)",
+  fontSize: "0.72rem",
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color: "var(--pf-color-text-muted)",
+  background: "color-mix(in srgb, var(--pf-color-bg) 82%, transparent)",
+  border: "1px solid var(--pf-surface-card-border)",
+};
+
+function FeatureMotif({
+  kind,
+  icon: Icon,
+  accent,
+  label,
+}: {
+  kind: FeatureMotifKind;
+  icon: typeof Target;
+  accent: string;
+  label: string;
+}) {
+  if (kind === "profile") {
+    return (
+      <div style={featureCardMotif} aria-hidden="true">
+        <span style={featureCardMotifLabel}>{label}</span>
+        <div
+          style={{
+            position: "absolute",
+            inset: 14,
+            borderRadius: "50%",
+            border: `1px solid color-mix(in srgb, ${accent} 22%, transparent)`,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: 28,
+            borderRadius: "50%",
+            border: `1px dashed color-mix(in srgb, ${accent} 24%, transparent)`,
+          }}
+        />
+        {Array.from({ length: 12 }).map((_, index) => {
+          const angle = (index / 12) * Math.PI * 2 - Math.PI / 2;
+          const radius = 66;
+          const x = Math.cos(angle) * radius;
+          const y = Math.sin(angle) * radius;
+
+          return (
+            <span
+              key={index}
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                transform: `translate(${x}px, ${y}px)`,
+                background:
+                  index % 3 === 0
+                    ? accent
+                    : "color-mix(in srgb, var(--pf-color-text-muted) 60%, transparent)",
+                boxShadow: `0 0 0 4px color-mix(in srgb, ${accent} 10%, transparent)`,
+              }}
+            />
+          );
+        })}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "grid",
+            placeItems: "center",
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              width: 114,
+              height: 114,
+              borderRadius: "50%",
+              border: `1px solid color-mix(in srgb, ${accent} 28%, transparent)`,
+              background:
+                "radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--pf-color-brand-500) 20%, transparent), transparent 62%)",
+              display: "grid",
+              placeItems: "center",
+              boxShadow: "var(--pf-shadow-sm)",
+            }}
+          >
+            <Icon size={38} strokeWidth={2} aria-hidden="true" />
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              bottom: 16,
+              right: 16,
+              padding: "8px 10px",
+              borderRadius: "var(--pf-radius-md)",
+              background: "var(--pf-surface-card-bg)",
+              border: "1px solid var(--pf-surface-card-border)",
+              color: "var(--pf-color-text-muted)",
+              fontSize: "0.76rem",
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+            }}
+          >
+            12 signals
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (kind === "ranking") {
+    return (
+      <div style={featureCardMotif} aria-hidden="true">
+        <span style={featureCardMotifLabel}>{label}</span>
+        <div
+          style={{
+            position: "absolute",
+            inset: 16,
+            display: "grid",
+            gap: 10,
+            alignContent: "center",
+          }}
+        >
+          {[94, 89, 82].map((score, index) => (
+            <div
+              key={score}
+              style={{
+                display: "grid",
+                gap: 6,
+                padding: "10px 12px",
+                borderRadius: "var(--pf-radius-sm)",
+                border: "1px solid var(--pf-surface-card-border)",
+                background:
+                  index === 0
+                    ? "color-mix(in srgb, var(--pf-color-brand-500) 10%, transparent)"
+                    : "color-mix(in srgb, var(--pf-color-bg) 82%, transparent)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  fontSize: "0.74rem",
+                  color: "var(--pf-color-text-muted)",
+                  fontWeight: 700,
+                }}
+              >
+                <span>Fit signal</span>
+                <span style={{ color: accent }}>{score}%</span>
+              </div>
+              <div
+                style={{
+                  height: 8,
+                  borderRadius: 999,
+                  overflow: "hidden",
+                  background:
+                    "color-mix(in srgb, var(--pf-color-bg-subtle) 88%, transparent)",
+                }}
+              >
+                <span
+                  style={{
+                    display: "block",
+                    width: `${score}%`,
+                    height: "100%",
+                    borderRadius: 999,
+                    background: accent,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            width: 58,
+            height: 58,
+            borderRadius: "50%",
+            border: `1px solid color-mix(in srgb, ${accent} 24%, transparent)`,
+            background:
+              "radial-gradient(circle, color-mix(in srgb, var(--pf-color-brand-500) 16%, transparent), transparent 68%)",
+            display: "grid",
+            placeItems: "center",
+          }}
+        >
+          <Icon size={24} strokeWidth={2.1} aria-hidden="true" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={featureCardMotif} aria-hidden="true">
+      <span style={featureCardMotifLabel}>{label}</span>
+      <div
+        style={{
+          position: "absolute",
+          inset: 18,
+          borderRadius: 22,
+          border: `1px solid color-mix(in srgb, ${accent} 18%, transparent)`,
+          background:
+            "linear-gradient(135deg, color-mix(in srgb, var(--pf-color-brand-500) 10%, transparent), transparent 55%)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "grid",
+          alignContent: "center",
+          gap: 12,
+          padding: 20,
+        }}
+      >
+        {[
+          { label: "Path", value: "Tech" },
+          { label: "Track", value: "Healthcare" },
+          { label: "Next", value: "Creative" },
+        ].map((item, index) => (
+          <div
+            key={item.label}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+              padding: "10px 12px",
+              borderRadius: "var(--pf-radius-sm)",
+              border: "1px solid var(--pf-surface-card-border)",
+              background:
+                index === 1
+                  ? "color-mix(in srgb, var(--pf-color-brand-500) 10%, transparent)"
+                  : "color-mix(in srgb, var(--pf-color-bg) 82%, transparent)",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "0.72rem",
+                color: "var(--pf-color-text-muted)",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                fontWeight: 700,
+              }}
+            >
+              {item.label}
+            </span>
+            <span style={{ fontSize: "0.82rem", fontWeight: 700 }}>
+              {item.value}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          right: 16,
+          bottom: 16,
+          width: 68,
+          height: 68,
+          borderRadius: "50%",
+          border: `1px solid color-mix(in srgb, ${accent} 26%, transparent)`,
+          background:
+            "radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--pf-color-brand-500) 20%, transparent), transparent 62%)",
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        <Icon size={28} strokeWidth={2.1} aria-hidden="true" />
+      </div>
+    </div>
+  );
+}
 
 type HeroPhase = "chaos" | "organizing" | "clarity";
 
@@ -1482,72 +1854,60 @@ export default function Home() {
       )}
 
       <div style={features}>
-        <motion.div
-          style={card}
-          initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-          animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-          transition={
-            reduceMotion ? undefined : { duration: 0.22, delay: 0.08 }
-          }
-        >
-          <IconLabel
-            icon={Target}
-            variant="compact"
-            style={{ fontWeight: 700, marginBottom: 6 }}
-            iconStyle={iconWrap}
+        {featureCards.map((feature, index) => (
+          <motion.article
+            key={feature.title}
+            style={card}
+            initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+            animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+            transition={
+              reduceMotion ? undefined : { duration: 0.22, delay: 0.08 + index * 0.04 }
+            }
           >
-            12-Dimension Profile
-          </IconLabel>
-          <p
-            style={{ color: "var(--pf-color-text-muted)", fontSize: "0.85rem" }}
-          >
-            {HOME_COPY.features.dimensionProfile}
-          </p>
-        </motion.div>
-        <motion.div
-          style={card}
-          initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-          animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-          transition={
-            reduceMotion ? undefined : { duration: 0.22, delay: 0.12 }
-          }
-        >
-          <IconLabel
-            icon={Brain}
-            variant="compact"
-            style={{ fontWeight: 700, marginBottom: 6 }}
-            iconStyle={iconWrap}
-          >
-            AI-Scored Matches
-          </IconLabel>
-          <p
-            style={{ color: "var(--pf-color-text-muted)", fontSize: "0.85rem" }}
-          >
-            {HOME_COPY.features.aiScoredMatches}
-          </p>
-        </motion.div>
-        <motion.div
-          style={card}
-          initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-          animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-          transition={
-            reduceMotion ? undefined : { duration: 0.22, delay: 0.16 }
-          }
-        >
-          <IconLabel
-            icon={TrendingUp}
-            variant="compact"
-            style={{ fontWeight: 700, marginBottom: 6 }}
-            iconStyle={iconWrap}
-          >
-            Track-Aware Guidance
-          </IconLabel>
-          <p
-            style={{ color: "var(--pf-color-text-muted)", fontSize: "0.85rem" }}
-          >
-            {HOME_COPY.features.trackInsights}
-          </p>
-        </motion.div>
+            <div style={featureCardCopy}>
+              <IconLabel
+                icon={feature.icon}
+                variant="compact"
+                style={{ fontWeight: 700, marginBottom: 2 }}
+                iconStyle={iconWrap}
+              >
+                {feature.title}
+              </IconLabel>
+              <p style={featureCardSummary}>{feature.summary}</p>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 6,
+                  padding: "14px 14px 12px",
+                  borderRadius: "var(--pf-radius-sm)",
+                  border: "1px solid var(--pf-surface-card-border)",
+                  background:
+                    "color-mix(in srgb, var(--pf-color-bg-subtle) 84%, transparent)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "var(--pf-color-brand-500)",
+                  }}
+                >
+                  How the app achieves it
+                </span>
+                <p style={featureCardExplanation}>{feature.explanation}</p>
+              </div>
+            </div>
+
+            <FeatureMotif
+              kind={feature.motifKind}
+              icon={feature.icon}
+              accent={feature.accent}
+              label={feature.motifLabel}
+            />
+          </motion.article>
+        ))}
       </div>
     </motion.div>
   );
