@@ -121,14 +121,14 @@ describe('Golden-path integration: full intake → analyze → recommendations',
       .filter((l: string) => l.startsWith('data: '))
       .map((l: string) => JSON.parse(l.slice(6)));
 
-    // Should have: status + 5 progress + 1 complete = 7 events
-    expect(lines.length).toBe(7);
+    // Should have: status + 4 progress + 1 complete = 6 events
+    expect(lines.length).toBe(6);
     expect(lines[0].type).toBe('status');
     expect(lines[1].type).toBe('progress');
-    expect(lines[1].payload.progress).toBe(20);
-    expect(lines[5].type).toBe('progress');
-    expect(lines[5].payload.progress).toBe(100);
-    expect(lines[6].type).toBe('complete');
+    expect(lines[1].payload.progress).toBe(25);
+    expect(lines[4].type).toBe('progress');
+    expect(lines[4].payload.progress).toBe(100);
+    expect(lines[5].type).toBe('complete');
   });
 
   it('session status is now complete', async () => {

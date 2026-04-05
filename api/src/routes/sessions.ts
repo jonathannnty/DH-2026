@@ -12,17 +12,7 @@ import {
   CreateSessionRequestSchema,
   canTransition,
 } from '../schemas/career.js';
-import {
-  startAnalysis,
-  getStatus,
-  listAgents,
-  getResearchData,
-  getProfileAnalysis,
-  getRecommendations,
-  getVerificationResults,
-  getCareerReport,
-  getDetailedResults,
-} from '../services/agent.js';
+import { startAnalysis, getStatus, isAgentReachable } from '../services/agent.js';
 import { processIntakeMessage, getGreeting } from '../services/intake.js';
 import { getRecommendationsForTrack } from '../services/demo.js';
 import { generatePersonalizedFallback } from '../services/personalizedFallback.js';
@@ -210,15 +200,6 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         return;
       }
 
-      // ── Map agent names to human-readable stages ──
-      const agentStages: Record<string, string> = {
-        'research': 'Researching job market trends',
-        'profile_analysis': 'Analyzing your profile',
-        'recommendations': 'Generating recommendations',
-        'verification': 'Verifying results',
-        'report_generation': 'Finalizing your career report',
-      };
-
       // ── Demo mode: deterministic SSE sequence ──
       if (env.DEMO_MODE) {
         const trackId = row.trackId ?? null;
@@ -226,37 +207,33 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         // Track-specific stage labels give each track a distinct feel
         const stageLabels: [number, string][] = trackId === 'tech-career'
           ? [
-            [20, agentStages['research'] || 'Scanning tech job market signals'],
-            [40, agentStages['profile_analysis'] || 'Scoring engineering career fits'],
-            [60, agentStages['recommendations'] || 'Mapping salary bands and growth paths'],
-            [80, agentStages['verification'] || 'Validating recommendations'],
-            [100, agentStages['report_generation'] || 'Finalizing your Tech Career report'],
+            [25, 'Scanning tech job market signals'],
+            [50, 'Scoring engineering career fits'],
+            [75, 'Mapping salary bands and growth paths'],
+            [100, 'Finalizing your Tech Career report'],
           ]
           : trackId === 'healthcare-pivot'
           ? [
-            [20, 'Researching healthcare sector opportunities'],
-            [40, 'Analyzing your healthcare fit'],
-            [60, 'Identifying clinical and health-tech roles'],
-            [80, 'Verifying licensure requirements'],
-            [100, agentStages['report_generation'] || 'Finalizing your Healthcare Career report'],
+            [25, 'Evaluating healthcare sector fit'],
+            [50, 'Matching clinical and health-tech roles'],
+            [75, 'Modeling licensure and transition paths'],
+            [100, 'Finalizing your Healthcare Career report'],
           ]
           : trackId === 'creative-industry'
           ? [
-            [20, 'Analysing creative industry landscape'],
-            [40, 'Scoring portfolio and skills alignment'],
-            [60, agentStages['recommendations'] || 'Identifying studio and freelance opportunities'],
-            [80, agentStages['verification'] || 'Validating creative opportunities'],
-            [100, agentStages['report_generation'] || 'Finalizing your Creative Industry report'],
+            [25, 'Analysing creative industry landscape'],
+            [50, 'Scoring portfolio and skills alignment'],
+            [75, 'Identifying studio and freelance opportunities'],
+            [100, 'Finalizing your Creative Industry report'],
           ]
           : [
-            [20, agentStages['research'] || 'Evaluating career fit'],
-            [40, agentStages['profile_analysis'] || 'Analyzing your profile'],
-            [60, agentStages['recommendations'] || 'Generating recommendations'],
-            [80, agentStages['verification'] || 'Verifying results'],
-            [100, agentStages['report_generation'] || 'Finalizing results'],
+            [25, 'Evaluating career fit'],
+            [50, 'Scoring recommendations'],
+            [75, 'Generating action plans'],
+            [100, 'Finalizing results'],
           ];
 
-        const delays = [500, 800, 600, 700, 400];
+        const delays = [500, 800, 600, 400];
         const steps = [
           ...stageLabels.map(([progress, stage], i) => ({
             delay: delays[i],
@@ -346,43 +323,38 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
         try {
           const agentStatus = await getStatus(req.params.id);
-          
-          // Map agent name to human-readable stage
-          const currentAgent = agentStatus.current_agent || 'analysis';
-          const stageName = agentStages[currentAgent] || `Running ${currentAgent}`;
-          
-          send({ type: 'progress', payload: { 
-            status: agentStatus.status, 
-            progress: agentStatus.progress,
-            stage: stageName,
-            current_agent: currentAgent
-          } });
+          pollFailures = 0;
 
-          if (agentStatus.status === 'completed') {
-            // Extract recommendations from report generation agent
-            const reportData = agentStatus.results?.report_generation as Record<string, unknown> | undefined;
-            let recs: CareerRecommendation[] = [];
-            
-            // Try to extract recommendations from agent report
-            if (reportData?.recommendations) {
-              recs = reportData.recommendations as CareerRecommendation[];
+          send({
+            type: 'progress',
+            payload: { status: agentStatus.status, progress: agentStatus.progress, stage: agentStatus.stage },
+          });
+
+          if (agentStatus.status === 'complete') {
+            if (terminated) return;
+            terminated = true;
+            clearInterval(poll);
+            clearTimeout(timeoutHandle);
+
+            let recs: CareerRecommendation[];
+
+            if (agentStatus.recommendations?.length) {
+              // Apply track enrichment to live agent recs
+              const adapter = getAdapter(trackId ?? 'general');
+              recs = await adapter.enrich(profile, agentStatus.recommendations);
             } else {
-              // Fallback to track-based recommendations
-              recs = getRecommendationsForTrack(row.trackId ?? null);
+              // Agent completed but returned no recs — use personalized fallback
+              const rawRecs = generatePersonalizedFallback(profile, trackId);
+              const adapter = getAdapter(trackId ?? 'general');
+              recs = await adapter.enrich(profile, rawRecs);
             }
-            
-            // Update session with results
+
             await db
               .update(sessions)
-              .set({
-                status: 'complete',
-                recommendations: JSON.stringify(recs),
-                updatedAt: now(),
-              })
+              .set({ status: 'complete', recommendations: JSON.stringify(recs), updatedAt: now() })
               .where(eq(sessions.id, req.params.id));
-            
+
             send({ type: 'complete', payload: { status: 'complete', progress: 100 } });
-            clearInterval(poll);
             reply.raw.end();
           } else if (agentStatus.status === 'error') {
             await invokeFallback(`agent reported error: ${agentStatus.error ?? 'unknown'}`);
@@ -446,13 +418,14 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         .set({ status: 'analyzing', updatedAt: ts })
         .where(eq(sessions.id, req.params.id));
 
-      startAnalysis(req.params.id, profile, row.trackId ?? undefined).catch(async (err) => {
-        app.log.error(err, 'Analysis failed, transitioning to error');
-        await db
-          .update(sessions)
-          .set({ status: 'error', updatedAt: now() })
-          .where(eq(sessions.id, req.params.id));
-      });
+      const agentUp = await isAgentReachable();
+      if (agentUp) {
+        startAnalysis(req.params.id, profile, row.trackId).catch((err) => {
+          app.log.warn(err, 'startAnalysis call failed — SSE timeout will trigger fallback');
+        });
+      } else {
+        app.log.warn({ sessionId: req.params.id }, 'Agent unreachable at analyze time — SSE timeout will trigger personalized fallback');
+      }
 
       return reply.send({ ok: true as const });
     },
@@ -477,142 +450,6 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       }
 
       return parseJson<CareerRecommendation[]>(row.recommendations ?? '[]', []);
-    },
-  );
-
-  // ── GET /sessions/:id/results/agents ────────────────────────────
-  // List all available agents and their status
-  app.get<{ Params: { id: string } }>(
-    '/sessions/:id/results/agents',
-    async (_req, reply) => {
-      try {
-        const agents = await listAgents();
-        return reply.send(agents);
-      } catch (err) {
-        return reply.serviceUnavailable(
-          'Agent service is not reachable. Please try again later.',
-        );
-      }
-    },
-  );
-
-  // ── GET /sessions/:id/results/research ──────────────────────────
-  // Get research data from Research Agent
-  app.get<{ Params: { id: string } }>(
-    '/sessions/:id/results/research',
-    async (req, reply) => {
-      try {
-        const data = await getResearchData(req.params.id);
-        return reply.send({
-          agent: 'research',
-          data,
-        });
-      } catch (err) {
-        return reply
-          .status(404)
-          .send({ error: 'Research data not available', message: (err as Error).message });
-      }
-    },
-  );
-
-  // ── GET /sessions/:id/results/profile ───────────────────────────
-  // Get profile analysis from Profile Analysis Agent
-  app.get<{ Params: { id: string } }>(
-    '/sessions/:id/results/profile',
-    async (req, reply) => {
-      try {
-        const data = await getProfileAnalysis(req.params.id);
-        return reply.send({
-          agent: 'profile_analysis',
-          data,
-        });
-      } catch (err) {
-        return reply
-          .status(404)
-          .send({ error: 'Profile analysis not available', message: (err as Error).message });
-      }
-    },
-  );
-
-  // ── GET /sessions/:id/results/recommendations ────────────────────
-  // Get recommendations from Recommendations Agent
-  app.get<{ Params: { id: string } }>(
-    '/sessions/:id/results/recommendations',
-    async (req, reply) => {
-      try {
-        const data = await getRecommendations(req.params.id);
-        return reply.send({
-          agent: 'recommendations',
-          data,
-        });
-      } catch (err) {
-        return reply
-          .status(404)
-          .send({ error: 'Recommendations not available', message: (err as Error).message });
-      }
-    },
-  );
-
-  // ── GET /sessions/:id/results/verification ──────────────────────
-  // Get verification results from Verification Agent
-  app.get<{ Params: { id: string } }>(
-    '/sessions/:id/results/verification',
-    async (req, reply) => {
-      try {
-        const data = await getVerificationResults(req.params.id);
-        return reply.send({
-          agent: 'verification',
-          data,
-        });
-      } catch (err) {
-        return reply
-          .status(404)
-          .send({ error: 'Verification results not available', message: (err as Error).message });
-      }
-    },
-  );
-
-  // ── GET /sessions/:id/results/report ────────────────────────────
-  // Get generated report from Report Generation Agent
-  app.get<{ Params: { id: string } }>(
-    '/sessions/:id/results/report',
-    async (req, reply) => {
-      try {
-        const data = await getCareerReport(req.params.id);
-        return reply.send({
-          agent: 'report_generation',
-          data,
-        });
-      } catch (err) {
-        return reply
-          .status(404)
-          .send({ error: 'Report not available', message: (err as Error).message });
-      }
-    },
-  );
-
-  // ── GET /sessions/:id/results/all ───────────────────────────────
-  // Get all results from all 5 agents
-  app.get<{ Params: { id: string } }>(
-    '/sessions/:id/results/all',
-    async (req, reply) => {
-      try {
-        const results = await getDetailedResults(req.params.id);
-        return reply.send({
-          sessionId: req.params.id,
-          agents: {
-            research: results.research,
-            profile_analysis: results.profile_analysis,
-            recommendations: results.recommendations,
-            verification: results.verification,
-            report_generation: results.report,
-          },
-        });
-      } catch (err) {
-        return reply
-          .status(404)
-          .send({ error: 'Results not available', message: (err as Error).message });
-      }
     },
   );
 }

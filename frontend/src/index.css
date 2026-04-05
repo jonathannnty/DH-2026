@@ -7,19 +7,55 @@
 }
 
 :root {
-  --bg: #0f1117;
-  --bg-card: #1a1d27;
-  --bg-input: #252830;
-  --border: #2e3140;
-  --text: #e4e6eb;
-  --text-muted: #8b8fa3;
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --radius: 12px;
-  --radius-sm: 8px;
+  /* Brand foundation tokens */
+  --pf-color-bg-canvas: #0f1117;
+  --pf-color-bg-surface: #1a1d27;
+  --pf-color-bg-subtle: #252830;
+  --pf-color-border-subtle: #2e3140;
+  --pf-color-border-strong: #3a3f52;
+  --pf-color-text-primary: #e4e6eb;
+  --pf-color-text-muted: #8b8fa3;
+  --pf-color-text-inverse: #ffffff;
+  --pf-color-brand-500: #6366f1;
+  --pf-color-brand-400: #818cf8;
+  --pf-color-success-500: #22c55e;
+  --pf-color-warning-500: #f59e0b;
+  --pf-color-danger-500: #ef4444;
+  --pf-radius-sm: 8px;
+  --pf-radius-md: 12px;
+  --pf-radius-pill: 999px;
+  --pf-font-family-display: "Sora", "Manrope", sans-serif;
+  --pf-font-family-base: "Manrope", "Segoe UI", sans-serif;
+  --pf-font-family-mono: "IBM Plex Mono", Consolas, monospace;
+  --pf-shadow-soft: 0 6px 14px rgba(0, 0, 0, 0.2);
+  --pf-shadow-pressed: 0 2px 6px rgba(0, 0, 0, 0.25);
+  --pf-motion-fast: 120ms;
+  --pf-motion-base: 180ms;
+
+  /* Semantic tokens */
+  --pf-surface-card-bg: var(--pf-color-bg-surface);
+  --pf-surface-card-border: var(--pf-color-border-subtle);
+  --pf-focus-ring: var(--pf-color-brand-400);
+  --pf-progress-neutral: var(--pf-color-brand-500);
+  --pf-progress-complete: var(--pf-color-success-500);
+
+  /* Component tokens */
+  --pf-btn-primary-bg: var(--pf-color-brand-500);
+  --pf-btn-primary-text: var(--pf-color-text-inverse);
+  --pf-btn-secondary-bg: var(--pf-color-bg-surface);
+  --pf-btn-secondary-text: var(--pf-color-text-primary);
+  --pf-btn-secondary-border: var(--pf-color-border-subtle);
+  --pf-btn-success-bg: var(--pf-color-success-500);
+  --pf-chip-bg: var(--pf-color-bg-subtle);
+  --pf-chip-border: var(--pf-color-border-subtle);
+  --pf-chip-text: var(--pf-color-text-primary);
+  --pf-chip-selected-bg: rgba(99, 102, 241, 0.16);
+  --pf-chip-selected-border: var(--pf-color-brand-500);
+  --pf-chip-followup-bg: rgba(255, 255, 255, 0.02);
+  --pf-chip-followup-border: var(--pf-color-border-subtle);
+  --pf-cursor-x: 50vw;
+  --pf-cursor-y: 35vh;
+  --pf-cursor-active: 0;
 }
 
 html {
@@ -28,27 +64,100 @@ html {
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: var(--bg);
-  color: var(--text);
+  font-family:
+    var(--pf-font-family-base),
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  background: var(--pf-color-bg-canvas);
+  color: var(--pf-color-text-primary);
   line-height: 1.6;
   min-height: 100vh;
 }
 
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--pf-font-family-display);
+  letter-spacing: -0.03em;
+}
+
+strong,
+b {
+  font-weight: 700;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--pf-font-family-mono);
+}
+
 a {
-  color: var(--accent);
+  color: var(--pf-color-brand-500);
   text-decoration: none;
 }
 a:hover {
-  color: var(--accent-hover);
+  color: var(--pf-color-brand-400);
 }
 
 button {
   cursor: pointer;
   font-family: inherit;
+  transition:
+    transform var(--pf-motion-fast) ease,
+    filter var(--pf-motion-fast) ease,
+    box-shadow var(--pf-motion-base) ease,
+    background-color var(--pf-motion-base) ease,
+    border-color var(--pf-motion-base) ease,
+    color var(--pf-motion-base) ease;
 }
 
-input, textarea {
+button:disabled {
+  cursor: not-allowed;
+}
+
+button:not(:disabled):hover {
+  filter: brightness(1.07);
+  box-shadow: var(--pf-shadow-soft);
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px) scale(0.985);
+  filter: brightness(0.94);
+  box-shadow: var(--pf-shadow-pressed);
+}
+
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--pf-focus-ring);
+  outline-offset: 2px;
+}
+
+[role="button"] {
+  transition:
+    transform 120ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease,
+    filter 120ms ease;
+}
+
+[role="button"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+}
+
+[role="button"]:active {
+  transform: translateY(1px) scale(0.992);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.22);
+}
+
+input,
+textarea {
   font-family: inherit;
 }
 
@@ -56,4 +165,184 @@ input, textarea {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  isolation: isolate;
+}
+
+.ambient-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 18% 12%,
+      rgba(99, 102, 241, 0.16),
+      transparent 42%
+    ),
+    radial-gradient(circle at 84% 14%, rgba(34, 197, 94, 0.1), transparent 36%),
+    radial-gradient(
+      circle at 62% 84%,
+      rgba(245, 158, 11, 0.08),
+      transparent 34%
+    );
+}
+
+.ambient-cursor {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle 220px at var(--pf-cursor-x) var(--pf-cursor-y),
+      rgba(99, 102, 241, 0.18),
+      rgba(99, 102, 241, 0.05) 40%,
+      transparent 68%
+    ),
+    radial-gradient(
+      circle 120px at var(--pf-cursor-x) var(--pf-cursor-y),
+      rgba(255, 255, 255, 0.08),
+      transparent 70%
+    );
+  opacity: calc(var(--pf-cursor-active) * 0.9);
+  mix-blend-mode: screen;
+  filter: blur(8px);
+  transition: opacity 220ms ease;
+}
+
+.ambient-orb {
+  position: absolute;
+  display: block;
+  border-radius: 999px;
+  filter: blur(28px);
+  opacity: 0.46;
+  transform-origin: center;
+}
+
+.ambient-orb-a {
+  width: 52vmax;
+  height: 52vmax;
+  left: -18vmax;
+  top: -20vmax;
+  background: radial-gradient(
+    circle,
+    rgba(99, 102, 241, 0.3),
+    rgba(99, 102, 241, 0)
+  );
+  animation: ambientFloatA 24s ease-in-out infinite alternate;
+}
+
+.ambient-orb-b {
+  width: 44vmax;
+  height: 44vmax;
+  right: -14vmax;
+  top: 6vmax;
+  background: radial-gradient(
+    circle,
+    rgba(14, 165, 233, 0.24),
+    rgba(14, 165, 233, 0)
+  );
+  animation: ambientFloatB 26s ease-in-out infinite alternate;
+}
+
+.ambient-orb-c {
+  width: 46vmax;
+  height: 46vmax;
+  left: 34vmax;
+  bottom: -20vmax;
+  background: radial-gradient(
+    circle,
+    rgba(139, 92, 246, 0.18),
+    rgba(139, 92, 246, 0)
+  );
+  animation: ambientFloatC 28s ease-in-out infinite alternate;
+}
+
+.ambient-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(
+    circle at center,
+    rgba(0, 0, 0, 0.46),
+    rgba(0, 0, 0, 0)
+  );
+  opacity: 0.38;
+  animation: ambientGridDrift 34s linear infinite;
+}
+
+@keyframes ambientFloatA {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(6vmax, 3vmax, 0) scale(1.08);
+  }
+}
+
+@keyframes ambientFloatB {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(-7vmax, -3vmax, 0) scale(1.06);
+  }
+}
+
+@keyframes ambientFloatC {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(-4vmax, -5vmax, 0) scale(1.07);
+  }
+}
+
+@keyframes ambientGridDrift {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-28px, -16px, 0);
+  }
+}
+
+@media (max-width: 768px) {
+  .ambient-orb {
+    opacity: 0.32;
+    filter: blur(22px);
+  }
+
+  .ambient-grid {
+    opacity: 0.26;
+    background-size: 44px 44px;
+  }
+
+  .ambient-cursor {
+    opacity: calc(var(--pf-cursor-active) * 0.7);
+    filter: blur(10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-orb-a,
+  .ambient-orb-b,
+  .ambient-orb-c,
+  .ambient-grid,
+  .ambient-cursor {
+    animation: none;
+  }
+
+  .ambient-cursor {
+    opacity: 0;
+  }
 }
