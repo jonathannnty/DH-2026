@@ -1,4 +1,4 @@
-import type { CareerProfile, CareerRecommendation } from '../schemas/career.js';
+import type { CareerProfile } from '../schemas/career.js';
 
 const AGENT_URL =
   process.env.AGENT_SERVICE_URL ?? 'http://localhost:8000';

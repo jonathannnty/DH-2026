@@ -15,7 +15,6 @@ import {
 import {
   startAnalysis,
   getStatus,
-  isAgentReachable,
   listAgents,
   getResearchData,
   getProfileAnalysis,
@@ -347,7 +346,6 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
         try {
           const agentStatus = await getStatus(req.params.id);
-          retries = 0;
           
           // Map agent name to human-readable stage
           const currentAgent = agentStatus.current_agent || 'analysis';
@@ -387,36 +385,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
             clearInterval(poll);
             reply.raw.end();
           } else if (agentStatus.status === 'error') {
-            send({ type: 'error', payload: agentStatus as unknown as Record<string, unknown>});
-            clearInterval(poll);
-            reply.raw.end();
-          } else if (agentStatus.status === 'error') {
-            send({ type: 'error', payload: statusData as unknown as Record<string, unknown>});
-            clearInterval(poll);
-            clearTimeout(timeoutHandle);
-
-            let recs: CareerRecommendation[];
-
-            if (statusData.recommendations?.length) {
-              // Apply track enrichment to live agent recs
-              const adapter = getAdapter(trackId ?? 'general');
-              recs = await adapter.enrich(profile, statusData.recommendations);
-            } else {
-              // Agent completed but returned no recs — use personalized fallback
-              const rawRecs = generatePersonalizedFallback(profile, trackId);
-              const adapter = getAdapter(trackId ?? 'general');
-              recs = await adapter.enrich(profile, rawRecs);
-            }
-
-            await db
-              .update(sessions)
-              .set({ status: 'complete', recommendations: JSON.stringify(recs), updatedAt: now() })
-              .where(eq(sessions.id, req.params.id));
-
-            send({ type: 'complete', payload: { status: 'complete', progress: 100 } });
-            reply.raw.end();
-          } else if (agentStatus.status === 'error') {
-            await invokeFallback(`agent reported error: ${statusData.error ?? 'unknown'}`);
+            await invokeFallback(`agent reported error: ${agentStatus.error ?? 'unknown'}`);
           }
         } catch {
           pollFailures++;

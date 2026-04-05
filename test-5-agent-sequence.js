@@ -140,8 +140,70 @@ async function step3_TriggerAnalysis() {
   console.log('  5️⃣  Report Generation Agent (final synthesized report)');
 }
 
-async function step4_StreamResults() {
-  console.log('\n⏳ Step 4: Stream Results Until Completion');
+async function step4_ConsumeStream() {
+  console.log('\n⏳ Step 4: Consume SSE Stream');
+  console.log('─'.repeat(50));
+
+  return new Promise((resolve, reject) => {
+    try {
+      const url = new URL(`/sessions/${sessionId}/stream`, BASE_URL);
+      const options = {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: 'GET',
+        headers: { 'Accept': 'text/event-stream' },
+      };
+
+      const req = http.request(options, (res) => {
+        let buffer = '';
+        let lastStatus = '';
+
+        res.on('data', (chunk) => {
+          buffer += chunk.toString();
+          const lines = buffer.split('\n\n');
+          buffer = lines[lines.length - 1]; // Keep incomplete message
+
+          for (let i = 0; i < lines.length - 1; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith('data: ')) {
+              try {
+                const event = JSON.parse(line.slice(6));
+                if (event.type === 'status') {
+                  lastStatus = event.payload.status;
+                  console.log(`  ⏳ Status: ${event.payload.status}`);
+                } else if (event.type === 'progress') {
+                  process.stdout.write(
+                    `\r  ⏳ Progress: ${event.payload.progress}% - ${event.payload.stage || 'Processing'}...`
+                  );
+                } else if (event.type === 'complete') {
+                  console.log(`\n  ✅ Stream complete!`);
+                }
+              } catch (e) {
+                // Ignore parse errors
+              }
+            }
+          }
+        });
+
+        res.on('end', () => {
+          console.log('  ✓ Stream ended');
+          resolve();
+        });
+
+        res.on('error', reject);
+      });
+
+      req.on('error', reject);
+      req.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+async function step5_StreamResults() {
+  console.log('\n⏳ Step 5: Poll Until Complete');
   console.log('─'.repeat(50));
 
   let lastProgress = -1;
@@ -177,8 +239,8 @@ async function step4_StreamResults() {
   throw new Error('Analysis timeout - took longer than 2 minutes');
 }
 
-async function step5_DisplayResults() {
-  console.log('\n📊 Step 5: Display Results from Each Agent');
+async function step6_DisplayResults() {
+  console.log('\n📊 Step 6: Display Results from Each Agent');
   console.log('─'.repeat(50));
 
   const sessionRes = await makeRequest('GET', `/sessions/${sessionId}`);
@@ -251,8 +313,9 @@ async function main() {
     await step1_CreateSession();
     await step2_BuildProfile();
     await step3_TriggerAnalysis();
-    await step4_StreamResults();
-    await step5_DisplayResults();
+    await step4_ConsumeStream();
+    await step5_StreamResults();
+    await step6_DisplayResults();
 
     console.log('\n✨ Test completed successfully!\n');
     process.exit(0);
