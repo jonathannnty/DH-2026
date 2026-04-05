@@ -228,12 +228,33 @@ textarea {
 .home-hero-panel {
   --pf-hero-parallax-x: 0px;
   --pf-hero-parallax-y: 0px;
-  --pf-home-hero-bg: linear-gradient(140deg, #0f1117 0%, #1a1d27 52%, #0f1117 100%);
-  --pf-home-hero-tagline-bg: color-mix(in srgb, var(--pf-color-brand-500) 14%, rgba(255, 255, 255, 0.02));
-  --pf-home-hero-tagline-border: color-mix(in srgb, var(--pf-color-brand-500) 32%, transparent);
+  --pf-home-hero-bg: linear-gradient(
+    140deg,
+    #0f1117 0%,
+    #1a1d27 52%,
+    #0f1117 100%
+  );
+  --pf-home-hero-tagline-bg: color-mix(
+    in srgb,
+    var(--pf-color-brand-500) 14%,
+    rgba(255, 255, 255, 0.02)
+  );
+  --pf-home-hero-tagline-border: color-mix(
+    in srgb,
+    var(--pf-color-brand-500) 32%,
+    transparent
+  );
   --pf-home-hero-tagline-text: #aab8ff;
-  --pf-home-hero-phase-bg: linear-gradient(145deg, rgba(17, 21, 32, 0.9), rgba(20, 24, 34, 0.7));
-  --pf-home-hero-phase-border: color-mix(in srgb, var(--pf-surface-card-border) 72%, #6366f1 28%);
+  --pf-home-hero-phase-bg: linear-gradient(
+    145deg,
+    rgba(17, 21, 32, 0.9),
+    rgba(20, 24, 34, 0.7)
+  );
+  --pf-home-hero-phase-border: color-mix(
+    in srgb,
+    var(--pf-surface-card-border) 72%,
+    #6366f1 28%
+  );
   --pf-home-hero-question-bg: rgba(24, 28, 40, 0.66);
   --pf-home-hero-question-border: rgba(101, 109, 135, 0.54);
   --pf-home-hero-question-text: #c5cad7;
@@ -314,12 +335,33 @@ textarea {
 }
 
 html[data-theme="light"] .home-hero-panel {
-  --pf-home-hero-bg: linear-gradient(140deg, #f8faff 0%, #eef2ff 52%, #f8fafc 100%);
-  --pf-home-hero-tagline-bg: color-mix(in srgb, var(--pf-color-brand-500) 12%, #ffffff 88%);
-  --pf-home-hero-tagline-border: color-mix(in srgb, var(--pf-color-brand-500) 22%, #d8def0 78%);
+  --pf-home-hero-bg: linear-gradient(
+    140deg,
+    #f8faff 0%,
+    #eef2ff 52%,
+    #f8fafc 100%
+  );
+  --pf-home-hero-tagline-bg: color-mix(
+    in srgb,
+    var(--pf-color-brand-500) 12%,
+    #ffffff 88%
+  );
+  --pf-home-hero-tagline-border: color-mix(
+    in srgb,
+    var(--pf-color-brand-500) 22%,
+    #d8def0 78%
+  );
   --pf-home-hero-tagline-text: #4f46e5;
-  --pf-home-hero-phase-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(244, 247, 255, 0.9));
-  --pf-home-hero-phase-border: color-mix(in srgb, var(--pf-color-brand-500) 18%, #ccd6ea 82%);
+  --pf-home-hero-phase-bg: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.94),
+    rgba(244, 247, 255, 0.9)
+  );
+  --pf-home-hero-phase-border: color-mix(
+    in srgb,
+    var(--pf-color-brand-500) 18%,
+    #ccd6ea 82%
+  );
   --pf-home-hero-question-bg: rgba(255, 255, 255, 0.82);
   --pf-home-hero-question-border: rgba(99, 102, 241, 0.18);
   --pf-home-hero-question-text: #334155;

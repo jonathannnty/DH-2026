@@ -1,4 +1,9 @@
-import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  useParams,
+  Link,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import { useState, useEffect } from "react";
 import { getSession, getRecommendations } from "@/lib/api";
 import { useSessionStream } from "@/hooks/useSessionStream";
@@ -105,8 +110,10 @@ function FallbackBanner() {
         alignItems: "center",
         gap: 10,
         padding: "10px 16px",
-        background: "color-mix(in srgb, var(--pf-color-warning-500) 8%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--pf-color-warning-500) 30%, transparent)",
+        background:
+          "color-mix(in srgb, var(--pf-color-warning-500) 8%, transparent)",
+        border:
+          "1px solid color-mix(in srgb, var(--pf-color-warning-500) 30%, transparent)",
         borderRadius: "var(--pf-radius-md)",
         marginBottom: 16,
         fontSize: "0.82rem",

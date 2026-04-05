@@ -569,7 +569,8 @@ export default function Onboarding() {
         <div
           style={{
             padding: "8px 14px",
-            background: "color-mix(in srgb, var(--pf-color-danger-500) 10%, transparent)",
+            background:
+              "color-mix(in srgb, var(--pf-color-danger-500) 10%, transparent)",
             border: "1px solid var(--pf-color-danger-500)",
             borderRadius: "var(--pf-radius-sm)",
             color: "var(--pf-color-danger-500)",

@@ -221,17 +221,17 @@ const heroPhaseCopy: Record<
 > = {
   chaos: {
     lead: "Lost in Career Chaos?",
-        title: "Find Your Career Path",
+    title: "Find Your Career Path",
     subtitle: "Too many questions. Too many options. No clear direction.",
   },
   organizing: {
     lead: "Finding Your Path...",
-        title: "Find Your Career Path",
+    title: "Find Your Career Path",
     subtitle: "A guided assessment transforms confusion into clarity.",
   },
   clarity: {
     lead: "Clear Career Signals",
-        title: "Find Your Career Path",
+    title: "Find Your Career Path",
     subtitle:
       "A guided assessment that transforms your profile into ranked career recommendations with clear reasoning and immediate next steps.",
   },
@@ -268,9 +268,24 @@ const assessmentDimensions = [
 ] as const;
 
 const clarityCards = [
-  { title: "Software Engineer", score: 94, salary: "$120k-$180k", color: "#22c55e" },
-  { title: "Data Scientist", score: 89, salary: "$118k-$172k", color: "#818cf8" },
-  { title: "Product Manager", score: 82, salary: "$112k-$165k", color: "#f59e0b" },
+  {
+    title: "Software Engineer",
+    score: 94,
+    salary: "$120k-$180k",
+    color: "#22c55e",
+  },
+  {
+    title: "Data Scientist",
+    score: 89,
+    salary: "$118k-$172k",
+    color: "#818cf8",
+  },
+  {
+    title: "Product Manager",
+    score: 82,
+    salary: "$112k-$165k",
+    color: "#f59e0b",
+  },
 ] as const;
 
 function getNextPhase(current: HeroPhase): HeroPhase {
@@ -375,7 +390,7 @@ function ChaosVisualization({
           reduceMotion
             ? undefined
             : { duration: 1.9, repeat: Infinity, ease: "easeInOut" }
-      }
+        }
       >
         <span style={{ fontWeight: 700, fontSize: "0.98rem" }}>
           Too many questions
@@ -398,11 +413,7 @@ function ChaosVisualization({
   );
 }
 
-function OrganizingVisualization({
-  reduceMotion,
-}: {
-  reduceMotion: boolean;
-}) {
+function OrganizingVisualization({ reduceMotion }: { reduceMotion: boolean }) {
   const radius = 162;
 
   return (
@@ -513,7 +524,11 @@ function OrganizingVisualization({
           }
         />
         <div
-          style={{ fontSize: "0.74rem", textTransform: "uppercase", letterSpacing: "0.08em" }}
+          style={{
+            fontSize: "0.74rem",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
         >
           Analyzing...
         </div>
@@ -522,11 +537,7 @@ function OrganizingVisualization({
   );
 }
 
-function ClarityVisualization({
-  reduceMotion,
-}: {
-  reduceMotion: boolean;
-}) {
+function ClarityVisualization({ reduceMotion }: { reduceMotion: boolean }) {
   return (
     <div
       style={{
@@ -586,7 +597,13 @@ function ClarityVisualization({
                 gap: 8,
               }}
             >
-              <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--pf-home-hero-card-title)" }}>
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: "0.95rem",
+                  color: "var(--pf-home-hero-card-title)",
+                }}
+              >
                 {career.title}
               </div>
               <span
@@ -621,7 +638,11 @@ function ClarityVisualization({
                 }}
                 initial={{ width: 0 }}
                 animate={{ width: `${career.score}%` }}
-                transition={{ duration: 0.7, delay: 0.22 + index * 0.1, ease: "easeOut" }}
+                transition={{
+                  duration: 0.7,
+                  delay: 0.22 + index * 0.1,
+                  ease: "easeOut",
+                }}
               />
             </div>
             <div
@@ -635,7 +656,9 @@ function ClarityVisualization({
               }}
             >
               <span>Why it fits</span>
-              <span style={{ color: "var(--pf-home-hero-card-match)" }}>Match</span>
+              <span style={{ color: "var(--pf-home-hero-card-match)" }}>
+                Match
+              </span>
             </div>
             <div
               className="phase-card-meta"
@@ -649,7 +672,9 @@ function ClarityVisualization({
               }}
             >
               <span>Salary</span>
-              <span style={{ color: "var(--pf-home-hero-card-salary)" }}>{career.salary}</span>
+              <span style={{ color: "var(--pf-home-hero-card-salary)" }}>
+                {career.salary}
+              </span>
             </div>
             <div
               className="phase-card-salary"
@@ -881,9 +906,16 @@ export default function Home() {
             style={heroTagline}
             initial={reduceMotion ? false : { opacity: 0, y: -10 }}
             animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-            transition={reduceMotion ? undefined : { duration: 0.5, ease: "easeOut" }}
+            transition={
+              reduceMotion ? undefined : { duration: 0.5, ease: "easeOut" }
+            }
           >
-            <Sparkles size={14} strokeWidth={2} aria-hidden="true" color="#9aa8ff" />
+            <Sparkles
+              size={14}
+              strokeWidth={2}
+              aria-hidden="true"
+              color="#9aa8ff"
+            />
             <span style={heroTaglineText}>{HOME_COPY.hero.kicker}</span>
           </motion.div>
 
@@ -893,12 +925,16 @@ export default function Home() {
               className="home-hero-title-accent"
               initial={reduceMotion ? false : { opacity: 0, y: 12 }}
               animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-              transition={reduceMotion ? undefined : { duration: 0.35, ease: "easeOut" }}
+              transition={
+                reduceMotion ? undefined : { duration: 0.35, ease: "easeOut" }
+              }
               aria-live="polite"
             >
               {heroPhaseCopy[heroPhase].lead}
             </motion.span>
-            <span className="home-hero-title-main">{heroPhaseCopy[heroPhase].title}</span>
+            <span className="home-hero-title-main">
+              {heroPhaseCopy[heroPhase].title}
+            </span>
           </h1>
 
           <motion.p
@@ -906,7 +942,9 @@ export default function Home() {
             style={heroSubtitle}
             initial={reduceMotion ? false : { opacity: 0, y: 8 }}
             animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-            transition={reduceMotion ? undefined : { duration: 0.3, ease: "easeOut" }}
+            transition={
+              reduceMotion ? undefined : { duration: 0.3, ease: "easeOut" }
+            }
           >
             {heroPhaseCopy[heroPhase].subtitle}
           </motion.p>
@@ -1004,7 +1042,9 @@ export default function Home() {
                   />
                 )}
                 {heroPhase === "organizing" && (
-                  <OrganizingVisualization reduceMotion={Boolean(reduceMotion)} />
+                  <OrganizingVisualization
+                    reduceMotion={Boolean(reduceMotion)}
+                  />
                 )}
                 {heroPhase === "clarity" && (
                   <ClarityVisualization reduceMotion={Boolean(reduceMotion)} />
@@ -1014,7 +1054,9 @@ export default function Home() {
           </div>
 
           <div style={heroFooter}>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <div
+              style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+            >
               {heroPhaseSequence.map((phase) => (
                 <button
                   key={phase}
@@ -1032,14 +1074,22 @@ export default function Home() {
             <motion.button
               type="button"
               className="phase-cta"
-              style={{ ...btn(!canStartAssessment), position: "relative", overflow: "hidden" }}
+              style={{
+                ...btn(!canStartAssessment),
+                position: "relative",
+                overflow: "hidden",
+              }}
               onClick={handleStart}
               disabled={!canStartAssessment}
               whileHover={
-                reduceMotion || !canStartAssessment ? undefined : { scale: 1.03 }
+                reduceMotion || !canStartAssessment
+                  ? undefined
+                  : { scale: 1.03 }
               }
               whileTap={
-                reduceMotion || !canStartAssessment ? undefined : { scale: 0.97 }
+                reduceMotion || !canStartAssessment
+                  ? undefined
+                  : { scale: 0.97 }
               }
             >
               <motion.span

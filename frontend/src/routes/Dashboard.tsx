@@ -186,24 +186,40 @@ export default function Dashboard() {
 
       {/* Compare mode banner */}
       {compareAId && (
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          padding: "10px 16px",
-          marginBottom: 16,
-          background: "color-mix(in srgb, var(--pf-color-brand-500) 8%, transparent)",
-          border: "1px solid color-mix(in srgb, var(--pf-color-brand-500) 25%, transparent)",
-          borderRadius: "var(--pf-radius-md)",
-          fontSize: "0.85rem",
-        }}>
-          <IconLabel icon={GitCompareArrows} variant="compact" style={{ color: "var(--pf-color-brand-400)", fontWeight: 600 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            padding: "10px 16px",
+            marginBottom: 16,
+            background:
+              "color-mix(in srgb, var(--pf-color-brand-500) 8%, transparent)",
+            border:
+              "1px solid color-mix(in srgb, var(--pf-color-brand-500) 25%, transparent)",
+            borderRadius: "var(--pf-radius-md)",
+            fontSize: "0.85rem",
+          }}
+        >
+          <IconLabel
+            icon={GitCompareArrows}
+            variant="compact"
+            style={{ color: "var(--pf-color-brand-400)", fontWeight: 600 }}
+          >
             Select a second completed session to compare
           </IconLabel>
           <button
             onClick={() => setCompareAId(null)}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--pf-color-text-muted)", display: "flex", alignItems: "center", padding: 4 }}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "var(--pf-color-text-muted)",
+              display: "flex",
+              alignItems: "center",
+              padding: 4,
+            }}
             aria-label="Cancel comparison"
           >
             <X size={14} strokeWidth={2} />
@@ -357,15 +373,17 @@ export default function Dashboard() {
 
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {isSelected && (
-                <span style={{
-                  fontSize: "0.72rem",
-                  fontWeight: 600,
-                  color: "var(--pf-color-brand-400)",
-                  padding: "3px 10px",
-                  border: "1px solid var(--pf-color-brand-400)",
-                  borderRadius: "var(--pf-radius-pill)",
-                  whiteSpace: "nowrap",
-                }}>
+                <span
+                  style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    color: "var(--pf-color-brand-400)",
+                    padding: "3px 10px",
+                    border: "1px solid var(--pf-color-brand-400)",
+                    borderRadius: "var(--pf-radius-pill)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
                   Selected
                 </span>
               )}
@@ -391,7 +409,10 @@ export default function Dashboard() {
               )}
               {canStartCompare && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); setCompareAId(s.id); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCompareAId(s.id);
+                  }}
                   style={{
                     fontSize: "0.72rem",
                     fontWeight: 600,
