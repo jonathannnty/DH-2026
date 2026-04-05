@@ -1,9 +1,21 @@
-import { useParams, Link, useNavigate } from "react-router-dom";
+import {
+  useParams,
+  Link,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import { useState, useEffect } from "react";
 import { getSession, getRecommendations } from "@/lib/api";
 import { useSessionStream } from "@/hooks/useSessionStream";
 import { useTrack } from "@/hooks/useTrack";
 import { motion, useReducedMotion } from "framer-motion";
+import {
+  ArrowRight,
+  CircleDollarSign,
+  Compass,
+  ShieldAlert,
+  Sparkles,
+} from "lucide-react";
 import type {
   CareerRecommendation,
   SessionResponse,
@@ -13,6 +25,8 @@ import {
   canPerformUiAction,
   deriveResultsStateContract,
 } from "@/types/uiStateContract";
+import { IconLabel } from "@/components/ui/IconLabel";
+import { UI_COPY } from "@/lib/copy";
 
 // ─── Styles ───────────────────────────────────────────────────────
 
@@ -96,8 +110,10 @@ function FallbackBanner() {
         alignItems: "center",
         gap: 10,
         padding: "10px 16px",
-        background: "rgba(245, 158, 11, 0.08)",
-        border: "1px solid rgba(245, 158, 11, 0.3)",
+        background:
+          "color-mix(in srgb, var(--pf-color-warning-500) 8%, transparent)",
+        border:
+          "1px solid color-mix(in srgb, var(--pf-color-warning-500) 30%, transparent)",
         borderRadius: "var(--pf-radius-md)",
         marginBottom: 16,
         fontSize: "0.82rem",
@@ -111,11 +127,10 @@ function FallbackBanner() {
           letterSpacing: "0.05em",
         }}
       >
-        Personalised Fallback Mode
+        {UI_COPY.fallback.modeBadge}
       </span>
       <span style={{ color: "var(--pf-color-text-muted)", fontWeight: 400 }}>
-        — Live analysis timed out. These recommendations are derived from your
-        profile using our offline engine.
+        — {UI_COPY.fallback.modeDescription}
       </span>
     </div>
   );
@@ -157,6 +172,7 @@ function TrackBanner({ track }: { track: SponsorTrack }) {
 export default function Results() {
   const reduceMotion = useReducedMotion();
   const { sessionId } = useParams<{ sessionId: string }>();
+  const [searchParams] = useSearchParams();
   const nav = useNavigate();
 
   const [session, setSession] = useState<SessionResponse | null>(null);
@@ -205,12 +221,22 @@ export default function Results() {
 
     if (type === "complete" && sessionId) {
       if ((payload as { isFallback?: boolean }).isFallback) setIsFallback(true);
-      getRecommendations(sessionId)
-        .then(setRecs)
-        .catch(() => setRecs([]));
+
+      // Fetch session first so status is updated before recommendations are fetched.
+      // Then retry recommendations once with a 1.5s delay if the first attempt fails —
+      // guards against any residual timing skew between the SSE emit and DB visibility.
       getSession(sessionId)
         .then(setSession)
         .catch(() => {});
+
+      getRecommendations(sessionId)
+        .then(setRecs)
+        .catch(() =>
+          new Promise<void>((res) => setTimeout(res, 1500))
+            .then(() => getRecommendations(sessionId))
+            .then(setRecs)
+            .catch(() => setRecs([])),
+        );
     }
 
     if (type === "error") {
@@ -250,7 +276,13 @@ export default function Results() {
 
     // Redirect intake sessions back to the chat
     if (session.status === "intake" && sessionId) {
-      nav(`/onboarding?session=${sessionId}`, { replace: true });
+      const finalTrack = session.trackId ?? searchParams.get("track");
+      nav(
+        finalTrack
+          ? `/onboarding?session=${sessionId}&track=${encodeURIComponent(finalTrack)}`
+          : `/onboarding?session=${sessionId}`,
+        { replace: true },
+      );
     }
 
     // Surface analysis errors
@@ -259,7 +291,7 @@ export default function Results() {
         "This session encountered an error during analysis. You can start a new assessment or return to the dashboard.",
       );
     }
-  }, [session, recs, sessionId, nav]);
+  }, [session, recs, sessionId, nav, searchParams]);
 
   // ── No session ID param ──
   if (resultsState.viewState === "no-session") {
@@ -528,18 +560,22 @@ export default function Results() {
                 marginBottom: 16,
               }}
             >
-              <span
+              <IconLabel
+                icon={CircleDollarSign}
+                variant="section"
                 style={{ color: "var(--pf-color-text-muted)", fontWeight: 400 }}
               >
                 Salary
-              </span>
+              </IconLabel>
               ${rec.salaryRange.low.toLocaleString()} – $
               {rec.salaryRange.high.toLocaleString()} USD
             </div>
           )}
 
           <div style={{ marginBottom: 14 }}>
-            <div
+            <IconLabel
+              icon={Sparkles}
+              variant="section"
               style={{
                 fontWeight: 600,
                 fontSize: "0.8rem",
@@ -550,7 +586,7 @@ export default function Results() {
               }}
             >
               Why it fits
-            </div>
+            </IconLabel>
             <div style={pillList}>
               {rec.reasons.map((r, j) => (
                 <span key={j} style={pill}>
@@ -562,7 +598,9 @@ export default function Results() {
 
           {rec.concerns.length > 0 && (
             <div style={{ marginBottom: 14 }}>
-              <div
+              <IconLabel
+                icon={ShieldAlert}
+                variant="section"
                 style={{
                   fontWeight: 600,
                   fontSize: "0.8rem",
@@ -573,7 +611,7 @@ export default function Results() {
                 }}
               >
                 Watch out for
-              </div>
+              </IconLabel>
               <div style={pillList}>
                 {rec.concerns.map((c, j) => (
                   <span key={j} style={pill}>
@@ -585,7 +623,9 @@ export default function Results() {
           )}
 
           <div>
-            <div
+            <IconLabel
+              icon={Compass}
+              variant="section"
               style={{
                 fontWeight: 600,
                 fontSize: "0.8rem",
@@ -596,7 +636,7 @@ export default function Results() {
               }}
             >
               Next steps
-            </div>
+            </IconLabel>
             <ol
               style={{
                 paddingLeft: 20,
@@ -628,15 +668,20 @@ export default function Results() {
           style={{
             padding: "12px 28px",
             background: "var(--pf-btn-primary-bg)",
-            color: "#fff",
+            color: "var(--pf-btn-primary-text)",
             border: "none",
             borderRadius: "var(--pf-radius-md)",
             fontWeight: 600,
             cursor: "pointer",
             fontSize: "0.9rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
           }}
         >
-          Start new assessment
+          <IconLabel icon={ArrowRight} variant="cta">
+            Start new assessment
+          </IconLabel>
         </button>
         <Link
           to="/dashboard"

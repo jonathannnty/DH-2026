@@ -41,10 +41,24 @@ export async function opsRoutes(app: FastifyInstance): Promise<void> {
       byStatus[s.status] = (byStatus[s.status] ?? 0) + 1;
     }
 
+    // For sessions stuck in 'analyzing', compute elapsed seconds since last update
+    const nowMs = Date.now();
+    const analyzingSessions = allSessions.filter((s) => s.status === 'analyzing');
+    const elapsedSecBySession = analyzingSessions.map((s) => {
+      const updatedMs = new Date(s.updatedAt).getTime();
+      return { id: s.id, elapsedSec: Math.round((nowMs - updatedMs) / 1000) };
+    });
+    const longestAnalyzingSec = elapsedSecBySession.length
+      ? Math.max(...elapsedSecBySession.map((e) => e.elapsedSec))
+      : null;
+
     return {
+      mode: env.DEMO_MODE ? 'demo' : 'live',
       demoMode: env.DEMO_MODE,
       sessionCount: allSessions.length,
       byStatus,
+      analyzing: elapsedSecBySession,
+      longestAnalyzingSec,
       dbPath: env.DATABASE_URL,
       auditedAt: new Date().toISOString(),
     };

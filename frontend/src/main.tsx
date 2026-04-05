@@ -12,6 +12,7 @@ const Home = lazy(() => import("@/routes/Home"));
 const Onboarding = lazy(() => import("@/routes/Onboarding"));
 const Dashboard = lazy(() => import("@/routes/Dashboard"));
 const Results = lazy(() => import("@/routes/Results"));
+const Compare = lazy(() => import("@/routes/Compare"));
 
 const routeFallbackStyle: React.CSSProperties = {
   flex: 1,
@@ -63,6 +64,14 @@ createRoot(document.getElementById("root")!).render(
                   element={
                     <ErrorBoundary label="Results">
                       <Results />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/compare"
+                  element={
+                    <ErrorBoundary label="Compare">
+                      <Compare />
                     </ErrorBoundary>
                   }
                 />

@@ -32,6 +32,53 @@ function parseJson<T>(raw: string, fallback: T): T {
   }
 }
 
+/**
+ * Verify that agent-generated recommendations show evidence of personalization.
+ * Checks that at least one rec mentions a skill/interest from the user's profile,
+ * and (if a sponsor track is set) that at least one rec is track-relevant.
+ * Returns true when the output looks personalized; false triggers fallback.
+ */
+function meetsPersonalizationContract(
+  recs: CareerRecommendation[],
+  profile: CareerProfile,
+  trackId: string | null,
+): boolean {
+  if (!recs.length) return false;
+
+  // Pull all text from the top recommendation for signal matching
+  const topText = `${recs[0].title} ${recs[0].summary} ${(recs[0].reasons ?? []).join(' ')}`.toLowerCase();
+
+  // If the profile has skills/interests, at least one must appear in the top rec
+  const profileSignals = [
+    ...(profile.hardSkills ?? []),
+    ...(profile.softSkills ?? []),
+    ...(profile.interests ?? []),
+  ].map((s) => s.toLowerCase().trim()).filter(Boolean);
+
+  if (profileSignals.length > 0) {
+    const hasSignal = profileSignals.some((sig) => topText.includes(sig));
+    if (!hasSignal) return false;
+  }
+
+  // Track keyword gate — at least one rec must be track-relevant
+  const TRACK_KEYWORDS: Record<string, string[]> = {
+    'tech-career': ['engineer', 'developer', 'software', 'data', 'ml', 'ai', 'cloud', 'tech'],
+    'healthcare-pivot': ['health', 'clinical', 'medical', 'care', 'nursing', 'hospital', 'biotech'],
+    'creative-industry': ['design', 'creative', 'art', 'visual', 'brand', 'ux', 'media', 'film'],
+  };
+
+  if (trackId && TRACK_KEYWORDS[trackId]) {
+    const keywords = TRACK_KEYWORDS[trackId];
+    const hasTrackSignal = recs.some((r) => {
+      const t = `${r.title} ${r.summary}`.toLowerCase();
+      return keywords.some((kw) => t.includes(kw));
+    });
+    if (!hasTrackSignal) return false;
+  }
+
+  return true;
+}
+
 export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   const env = loadEnv();
 
@@ -234,25 +281,27 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
           ];
 
         const delays = [500, 800, 600, 400];
-        const steps = [
-          ...stageLabels.map(([progress, stage], i) => ({
-            delay: delays[i],
-            event: { type: 'progress', payload: { status: 'analyzing', progress, stage } },
-          })),
-          { delay: 300, event: { type: 'complete', payload: { status: 'complete', progress: 100 } } },
-        ];
+        // Note: 'complete' event is NOT in this array — it is emitted only after
+        // the DB write succeeds, preventing the race where the browser calls
+        // getRecommendations() before the row is persisted.
+        const progressSteps = stageLabels.map(([progress, stage], i) => ({
+          delay: delays[i],
+          progress,
+          stage: stage as string,
+        }));
 
         let cancelled = false;
         req.raw.on('close', () => { cancelled = true; });
 
-        for (const step of steps) {
+        for (const step of progressSteps) {
           if (cancelled) break;
           await new Promise((r) => setTimeout(r, step.delay));
           if (cancelled) break;
-          send(step.event);
+          send({ type: 'progress', payload: { status: 'analyzing', progress: step.progress, stage: step.stage } });
         }
 
         if (!cancelled) {
+          // 1. Persist recommendations FIRST
           const recs = getRecommendationsForTrack(trackId);
           await db
             .update(sessions)
@@ -262,6 +311,12 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
               updatedAt: now(),
             })
             .where(eq(sessions.id, req.params.id));
+
+          // 2. Only then signal the browser — DB is guaranteed ready
+          await new Promise((r) => setTimeout(r, 300));
+          if (!cancelled) {
+            send({ type: 'complete', payload: { status: 'complete', progress: 100 } });
+          }
         }
 
         reply.raw.end();
@@ -337,16 +392,27 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
             clearTimeout(timeoutHandle);
 
             let recs: CareerRecommendation[];
+            let usedFallback = false;
 
-            if (agentStatus.recommendations?.length) {
-              // Apply track enrichment to live agent recs
+            const agentRecs = agentStatus.recommendations ?? [];
+            const passesContract = meetsPersonalizationContract(agentRecs, profile, trackId);
+
+            if (agentRecs.length && passesContract) {
+              // Live recs pass personalization contract — apply track enrichment
               const adapter = getAdapter(trackId ?? 'general');
-              recs = await adapter.enrich(profile, agentStatus.recommendations);
+              recs = await adapter.enrich(profile, agentRecs);
             } else {
-              // Agent completed but returned no recs — use personalized fallback
+              // Agent returned no recs, or recs failed personalization contract — use fallback
+              if (agentRecs.length && !passesContract) {
+                app.log.warn(
+                  { sessionId: req.params.id, recCount: agentRecs.length },
+                  'Live recs failed personalization contract — substituting personalized fallback',
+                );
+              }
               const rawRecs = generatePersonalizedFallback(profile, trackId);
               const adapter = getAdapter(trackId ?? 'general');
               recs = await adapter.enrich(profile, rawRecs);
+              usedFallback = true;
             }
 
             await db
@@ -354,7 +420,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
               .set({ status: 'complete', recommendations: JSON.stringify(recs), updatedAt: now() })
               .where(eq(sessions.id, req.params.id));
 
-            send({ type: 'complete', payload: { status: 'complete', progress: 100 } });
+            send({ type: 'complete', payload: { status: 'complete', progress: 100, isFallback: usedFallback } });
             reply.raw.end();
           } else if (agentStatus.status === 'error') {
             await invokeFallback(`agent reported error: ${agentStatus.error ?? 'unknown'}`);
