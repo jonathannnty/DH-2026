@@ -6,6 +6,8 @@ PathFinder AI is a judge-facing career advising product built for DiamondHacks 2
 
 This brief is intended for an experienced industry UI/UX designer. It should provide enough context to propose a strong visual and interaction system without needing to inspect the full codebase.
 
+Primary visual source of truth: `docs/branding-spec.md`.
+
 ## Product Goal
 
 The app’s core promise is simple:

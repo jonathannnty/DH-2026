@@ -149,6 +149,67 @@ describe("Onboarding", () => {
     });
   });
 
+  it("adds quick-pick chips to the draft and reveals follow-up chips", async () => {
+    const user = userEvent.setup();
+    renderAt(`/onboarding?session=${SESSION_INTAKE.id}`, <Onboarding />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByPlaceholderText(/Type your answer/),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Software development" }),
+    );
+
+    const input = screen.getByPlaceholderText(
+      /Type your answer/,
+    ) as HTMLInputElement;
+    expect(input.value).toContain("software development");
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Frontend engineering" }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Frontend engineering" }),
+    );
+    expect(input.value).toContain("software development");
+    expect(input.value).toContain("frontend engineering");
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Design systems" }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Data science" }));
+    await user.click(
+      screen.getByRole("button", { name: "Cloud infrastructure" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Cybersecurity" }));
+    await user.click(
+      screen.getByRole("button", { name: "Product engineering" }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Software development" }),
+      ).not.toBeInTheDocument();
+    });
+
+    await user.type(input, " and product strategy");
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Software development" }),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("shows send error and restores input when message send fails", async () => {
     server.use(
       http.post(

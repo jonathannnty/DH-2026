@@ -3,6 +3,9 @@
 This document turns the UI/UX brief into concrete product artifacts: user flows, screen-level wireframes, prototype behavior, usability assessment, and a test plan. It is grounded in the current app routes: Home, Onboarding, Results, and Dashboard.
 
 Visual prototype companion: docs/pathfinder-ai-prototype-map.md
+High-fidelity UI spec: docs/pathfinder-ai-hi-fi-ui-spec.md
+Engineering state contract: frontend/src/types/uiStateContract.ts
+State contract tests: frontend/src/**tests**/ui-state-contract.test.ts
 
 ## Design Goals
 
