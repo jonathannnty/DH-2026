@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { getSession, sendMessage, triggerAnalysis } from "@/lib/api";
+import { getSession, sendMessage, triggerAnalysis, prefetchResearch } from "@/lib/api";
 import { ApiError } from "@/lib/api";
 import type { ChatMessage, CareerProfile } from "@/schemas/career";
 import { useTrack } from "@/hooks/useTrack";
@@ -129,7 +129,6 @@ export default function Onboarding() {
   const [intakeComplete, setIntakeComplete] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
-  const [agentverseNotice, setAgentverseNotice] = useState<string | null>(null);
   const [trackId, setTrackId] = useState<string | null>(null);
   const [sessionStatus, setSessionStatus] = useState<
     "intake" | "analyzing" | "complete" | "error" | null
@@ -179,6 +178,14 @@ export default function Onboarding() {
         }
 
         setLoadState("ready");
+
+        // Start background research so it completes by the time user finishes intake
+        const trackToResearch = s.trackId ?? routeTrack ?? undefined;
+        if (trackToResearch !== undefined) {
+          prefetchResearch(trackToResearch).catch((err) => {
+            console.warn("Prefetch research failed (non-blocking):", err);
+          });
+        }
       })
       .catch(() => setLoadState("error"));
   }, [sessionId, nav, routeTrack]);
@@ -272,7 +279,6 @@ export default function Onboarding() {
 
     setAnalyzing(true);
     setAnalyzeError(null);
-    setAgentverseNotice(null);
     try {
       await triggerAnalysis(sessionId);
       const finalTrack = trackId ?? routeTrack;
@@ -288,7 +294,6 @@ export default function Onboarding() {
         try {
           const parsed = JSON.parse(err.message) as { message?: string };
           if (parsed.message?.includes("Agentverse-backed analysis is not ready")) {
-            setAgentverseNotice(parsed.message);
             setAnalyzeError("Agentverse pipeline is not ready.");
             return;
           }

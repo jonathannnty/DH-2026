@@ -79,6 +79,23 @@ export async function triggerAnalysis(
   return data as { ok: true };
 }
 
+export async function prefetchResearch(
+  trackId?: string,
+): Promise<Record<string, unknown>> {
+  // Call agent service directly to start background web research
+  const agentUrl = import.meta.env.VITE_AGENT_URL ?? "http://localhost:8000";
+  const res = await fetch(`${agentUrl}/research`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trackId: trackId ?? null }),
+  });
+  if (!res.ok) {
+    console.warn("Research prefetch failed:", res.status);
+    return {};
+  }
+  return res.json();
+}
+
 export async function getRecommendations(
   sessionId: string,
 ): Promise<CareerRecommendation[]> {

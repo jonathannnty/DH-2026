@@ -257,20 +257,20 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     ).length;
     const intakeComplete = assistantCount > INTAKE_STEPS_COUNT;
 
-      return {
-        id: row.id,
-        status: row.status,
-        trackId: row.trackId ?? null,
-        profile: parseJson<CareerProfile>(row.profile, {}),
-        messages: parseJson<ChatMessage[]>(row.messages, []),
-        recommendations: row.recommendations
-          ? parseJson<CareerRecommendation[]>(row.recommendations, [])
-          : undefined,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-      };
-    },
-  );
+    return reply.send({
+      id: row.id,
+      status: row.status,
+      trackId: row.trackId ?? null,
+      profile: parseJson<CareerProfile>(row.profile, {}),
+      messages: parseJson<ChatMessage[]>(row.messages, []),
+      recommendations: row.recommendations
+        ? parseJson<CareerRecommendation[]>(row.recommendations, [])
+        : undefined,
+      intakeComplete,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    });
+  });
 
   // ── GET /sessions/:id/report ───────────────────────────────────
   app.get<{ Params: { id: string } }>(
@@ -514,8 +514,10 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         return;
       }
 
-      // ── Live mode: poll agent service with 20s hard timeout + personalized fallback ──
-      const ANALYSIS_TIMEOUT_MS = 20_000;
+      // ── Live mode: poll agent service with 55s hard timeout + personalized fallback ──
+      // Allows agent service (Claude ~5s + Browser Use enrichment if available) to complete
+      // within the 1-minute analysis SLA. Background guard at 45s catches truly stuck sessions.
+      const ANALYSIS_TIMEOUT_MS = 55_000;
       const POLL_INTERVAL_MS = 2_000;
       const MAX_POLL_FAILURES = 3;
 
@@ -725,7 +727,8 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
       // Background guard: finalize stale analyzing sessions even if SSE stream is
       // not connected or disconnects before fallback can run.
-      const BACKGROUND_ANALYSIS_GUARD_MS = 45_000;
+      // Set at 50s to allow SSE timeout (55s) to complete first, but still catch runaway agents.
+      const BACKGROUND_ANALYSIS_GUARD_MS = 50_000;
       setTimeout(() => {
         void (async () => {
           const current = await db
@@ -804,7 +807,8 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         );
       }
 
-      return parseJson<CareerRecommendation[]>(row.recommendations ?? "[]", []);
+      const recs = parseJson<CareerRecommendation[]>(row.recommendations ?? "[]", []);
+      return reply.send(recs);
     },
   );
 }
