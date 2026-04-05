@@ -91,6 +91,8 @@ export const SessionResponseSchema = z.object({
   profile: CareerProfileSchema,
   messages: z.array(ChatMessageSchema),
   recommendations: z.array(CareerRecommendationSchema).optional(),
+  /** Deterministic: true when all intake steps have been answered. Never phrase-matched. */
+  intakeComplete: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -104,6 +106,8 @@ export const SendMessageRequestSchema = z.object({
 export const SendMessageResponseSchema = z.object({
   message: ChatMessageSchema,
   profileUpdate: CareerProfileSchema.partial(),
+  /** True when this was the final intake answer — drives chip tray hide without phrase-matching. */
+  intakeComplete: z.boolean(),
 });
 
 export type SendMessageResponse = z.infer<typeof SendMessageResponseSchema>;

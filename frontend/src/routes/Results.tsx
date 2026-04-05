@@ -4,7 +4,7 @@ import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getSession, getRecommendations } from "@/lib/api";
 import { useSessionStream } from "@/hooks/useSessionStream";
 import { useTrack } from "@/hooks/useTrack";
@@ -181,6 +181,9 @@ export default function Results() {
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState("Starting analysis…");
   const [isFallback, setIsFallback] = useState(false);
+  // Stuck-analyzer: if no SSE progress after 35s, show recovery UI instead of spinning forever
+  const [isStuck, setIsStuck] = useState(false);
+  const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const track = useTrack(session?.trackId);
   const shouldStream = session?.status === "analyzing";
@@ -208,6 +211,30 @@ export default function Results() {
       .then(setSession)
       .catch(() => setFetchError("Session not found or unavailable."));
   }, [sessionId]);
+
+  // Stuck-analyzer timer: starts when SSE opens, resets on each progress event,
+  // fires after 35s of silence to show recovery UI instead of an endless spinner.
+  useEffect(() => {
+    if (stream.status !== "open") return;
+
+    const arm = () => {
+      if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
+      stuckTimerRef.current = setTimeout(() => setIsStuck(true), 35_000);
+    };
+
+    arm();
+    return () => {
+      if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
+    };
+  }, [stream.status]);
+
+  // Re-arm the stuck timer on every progress event so active analysis never triggers it.
+  useEffect(() => {
+    if (stream.latestEvent?.type !== "progress") return;
+    setIsStuck(false);
+    if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
+    stuckTimerRef.current = setTimeout(() => setIsStuck(true), 35_000);
+  }, [stream.latestEvent]);
 
   // React to SSE events
   useEffect(() => {
@@ -263,6 +290,64 @@ export default function Results() {
         setFetchError("Lost connection to analysis stream. Please reload."),
       );
   }, [stream.status, recs, fetchError, sessionId]);
+
+  // Reconciliation loop: if session remains in "analyzing", poll session status
+  // for up to 60s so tracks do not appear stuck when SSE is interrupted.
+  useEffect(() => {
+    if (!sessionId || recs || fetchError) return;
+    if (session?.status !== "analyzing") return;
+
+    let active = true;
+    const startedAt = Date.now();
+
+    const pollForCompletion = async () => {
+      if (!active) return;
+      try {
+        const latest = await getSession(sessionId);
+        if (!active) return;
+        setSession(latest);
+
+        if (latest.status === "complete") {
+          const recommendations = await getRecommendations(sessionId);
+          if (!active) return;
+          setRecs(recommendations);
+          setIsStuck(false);
+          return;
+        }
+
+        if (latest.status === "error") {
+          setFetchError(
+            "This session encountered an error during analysis. You can start a new assessment or return to the dashboard.",
+          );
+          return;
+        }
+
+        if (Date.now() - startedAt >= 60_000) {
+          setIsStuck(true);
+          return;
+        }
+
+        window.setTimeout(() => {
+          void pollForCompletion();
+        }, 3000);
+      } catch {
+        if (Date.now() - startedAt >= 60_000) {
+          setIsStuck(true);
+          return;
+        }
+
+        window.setTimeout(() => {
+          void pollForCompletion();
+        }, 3000);
+      }
+    };
+
+    void pollForCompletion();
+
+    return () => {
+      active = false;
+    };
+  }, [sessionId, session?.status, recs, fetchError]);
 
   // If session is already complete on load
   useEffect(() => {
@@ -369,6 +454,63 @@ export default function Results() {
     resultsState.viewState === "analyzing"
   ) {
     const accentColor = track?.color ?? "var(--pf-color-brand-500)";
+
+    // Stuck: SSE has been silent for 35s — show recovery options instead of infinite spinner
+    if (isStuck) {
+      return (
+        <div style={{ ...wrap, ...centered }}>
+          <p style={{ fontWeight: 600, fontSize: "1.1rem" }}>
+            Analysis is taking longer than expected
+          </p>
+          <p style={{ color: "var(--pf-color-text-muted)", maxWidth: 380, fontSize: "0.875rem" }}>
+            The analysis stream went quiet. Your results may already be ready —
+            try refreshing, or go to the dashboard to check the session status.
+          </p>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+            <button
+              onClick={() => {
+                setIsStuck(false);
+                if (sessionId) {
+                  getSession(sessionId).then((s) => {
+                    setSession(s);
+                    if (s.status === "complete") {
+                      getRecommendations(sessionId).then(setRecs).catch(() => setRecs([]));
+                    }
+                  }).catch(() => window.location.reload());
+                }
+              }}
+              style={{
+                padding: "10px 22px",
+                background: "var(--pf-btn-primary-bg)",
+                color: "var(--pf-btn-primary-text)",
+                border: "none",
+                borderRadius: "var(--pf-radius-md)",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontSize: "0.9rem",
+              }}
+            >
+              Check for results
+            </button>
+            <Link
+              to="/dashboard"
+              style={{
+                padding: "10px 22px",
+                background: "var(--pf-btn-secondary-bg)",
+                border: "1px solid var(--pf-btn-secondary-border)",
+                borderRadius: "var(--pf-radius-md)",
+                color: "var(--pf-btn-secondary-text)",
+                fontWeight: 600,
+                fontSize: "0.9rem",
+              }}
+            >
+              Go to Dashboard
+            </Link>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div style={wrap}>
         <div style={centered}>

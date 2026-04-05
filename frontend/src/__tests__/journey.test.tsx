@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/msw-server";
-import { SESSION_INTAKE, SESSION_COMPLETE } from "../test/fixtures";
+import { SESSION_INTAKE, SESSION_INTAKE_COMPLETE, SESSION_COMPLETE } from "../test/fixtures";
 import Home from "../routes/Home";
 import Onboarding from "../routes/Onboarding";
 import Results from "../routes/Results";
@@ -271,6 +271,91 @@ describe("Onboarding", () => {
     expect(
       screen.queryByRole("button", { name: /Analyze My Career Profile/ }),
     ).not.toBeInTheDocument();
+  });
+});
+
+// ── Regression: chip tray hides when intakeComplete (Idea 3/7) ──────
+
+describe("Regression: chip tray hides on intakeComplete", () => {
+  it("hides QuickChoiceTray when session loads with intakeComplete=true", async () => {
+    server.use(
+      http.get("http://localhost:3001/sessions/:id", () =>
+        HttpResponse.json(SESSION_INTAKE_COMPLETE),
+      ),
+    );
+
+    renderAt(`/onboarding?session=${SESSION_INTAKE.id}`, <Onboarding />);
+
+    await waitFor(() => {
+      // The Analyze button should appear (intake is done)
+      expect(
+        screen.getByRole("button", { name: /Analyze My Career Profile/ }),
+      ).toBeInTheDocument();
+    });
+
+    // No chip buttons should be visible — tray must be hidden
+    expect(
+      screen.queryByRole("button", { name: "Software development" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides chip tray after server returns intakeComplete=true on final message", async () => {
+    server.use(
+      http.post("http://localhost:3001/sessions/:id/messages", () =>
+        HttpResponse.json({
+          message: {
+            id: "msg-final",
+            role: "assistant",
+            content:
+              "Your profile is complete — hit Analyze when ready.",
+            timestamp: new Date().toISOString(),
+          },
+          profileUpdate: { burnoutConcerns: ["long hours"] },
+          intakeComplete: true,
+        }),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderAt(`/onboarding?session=${SESSION_INTAKE.id}`, <Onboarding />);
+
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText(/Type your answer/)).toBeInTheDocument(),
+    );
+
+    await user.type(screen.getByPlaceholderText(/Type your answer/), "Long hours");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /Analyze My Career Profile/ }),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Software development" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+// ── Regression: Results exits loading when session already complete (Idea 2/7) ─
+
+describe("Regression: Results exits loading for already-complete session", () => {
+  it("shows recommendations without waiting for SSE when session is complete on load", async () => {
+    // Exact reproduction of the former infinite-loading bug:
+    // session loads as 'complete', no SSE stream needed, recs must render.
+    renderAt(`/results/${SESSION_COMPLETE.id}`, <Results />);
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("AI/ML Engineer — EdTech")).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
+
+    // Must NOT be stuck on loading state
+    expect(screen.queryByText(/Starting analysis/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Analyzing your career/)).not.toBeInTheDocument();
   });
 });
 

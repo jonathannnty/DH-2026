@@ -13,7 +13,7 @@ import {
   canTransition,
 } from '../schemas/career.js';
 import { startAnalysis, getStatus, isAgentReachable } from '../services/agent.js';
-import { processIntakeMessage, getGreeting } from '../services/intake.js';
+import { processIntakeMessage, getGreeting, INTAKE_STEPS_COUNT } from '../services/intake.js';
 import { getRecommendationsForTrack } from '../services/demo.js';
 import { generatePersonalizedFallback } from '../services/personalizedFallback.js';
 import { getAdapter } from '../services/adapters.js';
@@ -79,6 +79,15 @@ function meetsPersonalizationContract(
   return true;
 }
 
+async function buildFallbackRecommendations(
+  profile: CareerProfile,
+  trackId: string | null,
+): Promise<CareerRecommendation[]> {
+  const rawRecs = generatePersonalizedFallback(profile, trackId);
+  const adapter = getAdapter(trackId ?? 'general');
+  return adapter.enrich(profile, rawRecs);
+}
+
 export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   const env = loadEnv();
 
@@ -137,15 +146,22 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
       if (!row) return reply.notFound('Session not found');
 
+      const messages = parseJson<ChatMessage[]>(row.messages, []);
+      // intakeComplete is deterministic: all INTAKE_STEPS_COUNT questions have been answered
+      // when the assistant has sent greeting + INTAKE_STEPS_COUNT messages (= INTAKE_STEPS_COUNT + 1 total).
+      const assistantCount = messages.filter((m) => m.role === 'assistant').length;
+      const intakeComplete = assistantCount > INTAKE_STEPS_COUNT;
+
       return {
         id: row.id,
         status: row.status,
         trackId: row.trackId ?? null,
         profile: parseJson<CareerProfile>(row.profile, {}),
-        messages: parseJson<ChatMessage[]>(row.messages, []),
+        messages,
         recommendations: row.recommendations
           ? parseJson<CareerRecommendation[]>(row.recommendations, [])
           : undefined,
+        intakeComplete,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       };
@@ -214,6 +230,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({
         message: assistantMessage,
         profileUpdate: result.profileUpdate,
+        intakeComplete: result.intakeComplete,
       });
     },
   );
@@ -230,10 +247,15 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
       if (!row) return reply.notFound('Session not found');
 
+      const requestOrigin = req.headers.origin;
+      const allowOrigin = typeof requestOrigin === 'string' ? requestOrigin : '*';
+
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
+        'Access-Control-Allow-Origin': allowOrigin,
+        Vary: 'Origin',
       });
 
       const send = (event: { type: string; payload: Record<string, unknown> }) => {
@@ -456,6 +478,11 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       const from = row.status as SessionStatus;
       const to: SessionStatus = 'analyzing';
 
+      // Idempotent: if already analyzing, return success without creating a duplicate run.
+      if (from === 'analyzing') {
+        return reply.send({ ok: true as const, alreadyAnalyzing: true });
+      }
+
       if (!canTransition(from, to)) {
         return reply.badRequest(
           `Cannot transition from '${from}' to '${to}'. ` +
@@ -483,6 +510,40 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         .update(sessions)
         .set({ status: 'analyzing', updatedAt: ts })
         .where(eq(sessions.id, req.params.id));
+
+      // Background guard: finalize stale analyzing sessions even if SSE stream is
+      // not connected or disconnects before fallback can run.
+      const BACKGROUND_ANALYSIS_GUARD_MS = 45_000;
+      setTimeout(() => {
+        void (async () => {
+          const current = await db
+            .select()
+            .from(sessions)
+            .where(eq(sessions.id, req.params.id))
+            .get();
+
+          if (!current || current.status !== 'analyzing') return;
+
+          const currentProfile = parseJson<CareerProfile>(current.profile, profile);
+          const currentTrackId = current.trackId ?? null;
+          const recs = await buildFallbackRecommendations(currentProfile, currentTrackId);
+
+          await db
+            .update(sessions)
+            .set({ status: 'complete', recommendations: JSON.stringify(recs), updatedAt: now() })
+            .where(eq(sessions.id, req.params.id));
+
+          app.log.warn(
+            { sessionId: req.params.id },
+            'Background analysis guard finalized stuck session with fallback recommendations',
+          );
+        })().catch((err) => {
+          app.log.error(
+            { err, sessionId: req.params.id },
+            'Background analysis guard failed to finalize stuck session',
+          );
+        });
+      }, BACKGROUND_ANALYSIS_GUARD_MS);
 
       const agentUp = await isAgentReachable();
       if (agentUp) {
