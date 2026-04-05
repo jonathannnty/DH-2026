@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // ─── Domain schemas ────────────────────────────────────────────────
 
@@ -8,7 +8,7 @@ export const CareerProfileSchema = z.object({
   workingStyle: z.string().optional(),
   hardSkills: z.array(z.string()).optional(),
   softSkills: z.array(z.string()).optional(),
-  riskTolerance: z.enum(['low', 'medium', 'high']).optional(),
+  riskTolerance: z.enum(["low", "medium", "high"]).optional(),
   financialNeeds: z
     .object({
       minimumSalary: z.number().optional(),
@@ -17,22 +17,27 @@ export const CareerProfileSchema = z.object({
     })
     .optional(),
   geographicFlexibility: z
-    .enum(['local', 'remote', 'relocate', 'flexible'])
+    .enum(["local", "remote", "relocate", "flexible"])
     .optional(),
   educationLevel: z.string().optional(),
-  timelineUrgency: z.enum(['immediate', 'short', 'long']).optional(),
+  timelineUrgency: z.enum(["immediate", "short", "long"]).optional(),
   purposePriorities: z.array(z.string()).optional(),
   burnoutConcerns: z.array(z.string()).optional(),
 });
 
 export type CareerProfile = z.infer<typeof CareerProfileSchema>;
 
-export const SessionStatus = z.enum(['intake', 'analyzing', 'complete', 'error']);
+export const SessionStatus = z.enum([
+  "intake",
+  "analyzing",
+  "complete",
+  "error",
+]);
 export type SessionStatus = z.infer<typeof SessionStatus>;
 
 export const ChatMessageSchema = z.object({
   id: z.string(),
-  role: z.enum(['user', 'assistant']),
+  role: z.enum(["user", "assistant"]),
   content: z.string(),
   timestamp: z.string().datetime(),
 });
@@ -50,7 +55,7 @@ export const CareerRecommendationSchema = z.object({
     .object({
       low: z.number(),
       high: z.number(),
-      currency: z.literal('USD'),
+      currency: z.literal("USD"),
     })
     .optional(),
 });
@@ -102,7 +107,13 @@ export const SendMessageResponseSchema = z.object({
 export type SendMessageResponse = z.infer<typeof SendMessageResponseSchema>;
 
 export const StreamEventSchema = z.object({
-  type: z.enum(['status', 'progress', 'complete', 'error']),
+  type: z.enum([
+    "status",
+    "progress",
+    "complete",
+    "error",
+    "fallback_activated",
+  ]),
   payload: z.record(z.unknown()),
 });
 

@@ -140,12 +140,32 @@ export const HOME_COPY = {
   },
 
   features: {
-    dimensionProfile:
-      "Our intake combines preferences, capabilities, constraints, and goals into one structured profile so your recommendations reflect how you actually make decisions.",
-    aiScoredMatches:
-      "We score matches across dimensions, then explain why each role fits, where the risks are, expected compensation bands, and the fastest path to momentum.",
-    trackInsights:
-      "Track context sharpens your results with domain-specific skill signals, practical role pathways, and concrete actions tailored to that career lane.",
+    cards: {
+      dimensionProfile: {
+        title: "12-Dimension Profile",
+        summary:
+          "Our intake combines preferences, capabilities, constraints, and goals into one structured profile so your recommendations reflect how you actually make decisions.",
+        explanation:
+          "The homepage introduces the assessment as a 12-dimension profile because the app does not rely on a single quiz score. It gathers signals about interests, values, hard and soft skills, risk tolerance, financial needs, location, education, timeline, purpose, burnout risk, and work style. Those inputs are normalized into a shared state contract that the backend can score consistently, which is why the profile can power both the animated overview and the final recommendation engine.",
+        motifLabel: "Signal map",
+      },
+      aiScoredMatches: {
+        title: "AI-Scored Matches",
+        summary:
+          "We score matches across dimensions, then explain why each role fits, where the risks are, expected compensation bands, and the fastest path to momentum.",
+        explanation:
+          "Each recommendation card is built from multiple scoring layers: profile fit, market demand, track enrichment, and practical next steps. The app aggregates those signals into a ranked list, then adds the reasoning behind the score so the result feels auditable instead of opaque. That is also why the UI can surface fit percentages, salary ranges, and concerns together: the backend computes them as one bundle instead of as disconnected fragments.",
+        motifLabel: "Ranked fit",
+      },
+      trackInsights: {
+        title: "Track-Aware Guidance",
+        summary:
+          "Track context sharpens your results with domain-specific skill signals, practical role pathways, and concrete actions tailored to that career lane.",
+        explanation:
+          "The app keeps track selection in view from onboarding through results, then applies track-specific adapters before recommendations are shown. That lets the system adjust wording, highlight relevant roles, and attach guidance that matches the realities of a specific lane such as tech, healthcare, or creative work. In practice, the homepage card is a preview of that same logic: the selected track changes the preview motif, the guidance emphasis, and the steps the user sees next.",
+        motifLabel: "Route guide",
+      },
+    },
   },
 } as const;
 

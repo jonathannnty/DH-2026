@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
-import { Buffer } from 'node:buffer';
+import { Buffer } from "node:buffer";
 import { eq } from "drizzle-orm";
-import PDFDocument from 'pdfkit';
+import PDFDocument from "pdfkit";
 import { db } from "../db/client.js";
 import { sessions } from "../db/schema.js";
 import {
@@ -43,12 +43,14 @@ function parseJson<T>(raw: string, fallback: T): T {
 }
 
 function formatList(items: string[]): string {
-  if (!items.length) return 'None provided';
-  return items.map((item) => `- ${item}`).join('\n');
+  if (!items.length) return "None provided";
+  return items.map((item) => `- ${item}`).join("\n");
 }
 
-function formatSalaryRange(range?: CareerRecommendation['salaryRange']): string {
-  if (!range) return 'Not provided';
+function formatSalaryRange(
+  range?: CareerRecommendation["salaryRange"],
+): string {
+  if (!range) return "Not provided";
   return `$${range.low.toLocaleString()} - $${range.high.toLocaleString()} ${range.currency}`;
 }
 
@@ -60,44 +62,47 @@ interface ResourceLink {
 
 const CAREER_RESOURCES: ResourceLink[] = [
   {
-    title: 'Levels.fyi - Salary Calculator',
-    url: 'https://www.levels.fyi/',
-    description: 'Compare salaries and levels across tech companies worldwide',
+    title: "Levels.fyi - Salary Calculator",
+    url: "https://www.levels.fyi/",
+    description: "Compare salaries and levels across tech companies worldwide",
   },
   {
-    title: 'LinkedIn - Build Your Professional Network',
-    url: 'https://www.linkedin.com/',
-    description: 'Connect with professionals and explore job opportunities',
+    title: "LinkedIn - Build Your Professional Network",
+    url: "https://www.linkedin.com/",
+    description: "Connect with professionals and explore job opportunities",
   },
   {
-    title: 'Reforge - Professional Skills Courses',
-    url: 'https://www.reforge.com/',
-    description: 'Learn advanced skills like Product Management and Analytics',
+    title: "Reforge - Professional Skills Courses",
+    url: "https://www.reforge.com/",
+    description: "Learn advanced skills like Product Management and Analytics",
   },
   {
-    title: 'Glassdoor - Company Reviews',
-    url: 'https://www.glassdoor.com/',
-    description: 'Read salary reports and employee reviews of companies',
+    title: "Glassdoor - Company Reviews",
+    url: "https://www.glassdoor.com/",
+    description: "Read salary reports and employee reviews of companies",
   },
   {
-    title: 'AngelList - Startup Jobs',
-    url: 'https://www.angellist.com/',
-    description: 'Find jobs at early-stage startups and explore equity opportunities',
+    title: "AngelList - Startup Jobs",
+    url: "https://www.angellist.com/",
+    description:
+      "Find jobs at early-stage startups and explore equity opportunities",
   },
   {
-    title: 'Data Camp - Data Science Learning',
-    url: 'https://www.datacamp.com/',
-    description: 'Master Python, SQL, and data analytics skills online',
+    title: "Data Camp - Data Science Learning",
+    url: "https://www.datacamp.com/",
+    description: "Master Python, SQL, and data analytics skills online",
   },
   {
-    title: 'Coursera - Online Certifications',
-    url: 'https://www.coursera.org/',
-    description: 'Earn recognized credentials from top universities and companies',
+    title: "Coursera - Online Certifications",
+    url: "https://www.coursera.org/",
+    description:
+      "Earn recognized credentials from top universities and companies",
   },
   {
-    title: 'GitHub - Portfolio Showcase',
-    url: 'https://www.github.com/',
-    description: 'Build your technical portfolio and contribute to open-source projects',
+    title: "GitHub - Portfolio Showcase",
+    url: "https://www.github.com/",
+    description:
+      "Build your technical portfolio and contribute to open-source projects",
   },
 ];
 
@@ -114,86 +119,98 @@ function buildReportMarkdown(session: {
   const values = session.profile.values ?? [];
   const hardSkills = session.profile.hardSkills ?? [];
   const softSkills = session.profile.softSkills ?? [];
-  const actionSteps = topRecommendations.flatMap((recommendation) => recommendation.nextSteps).slice(0, 6);
+  const actionSteps = topRecommendations
+    .flatMap((recommendation) => recommendation.nextSteps)
+    .slice(0, 6);
 
   const recommendationSections = topRecommendations.length
-    ? topRecommendations.map((recommendation, index) => {
-      const reasons = formatList(recommendation.reasons);
-      const concerns = formatList(recommendation.concerns);
-      const steps = formatList(recommendation.nextSteps);
+    ? topRecommendations
+        .map((recommendation, index) => {
+          const reasons = formatList(recommendation.reasons);
+          const concerns = formatList(recommendation.concerns);
+          const steps = formatList(recommendation.nextSteps);
 
-      return [
-        `## ${index + 1}. ${recommendation.title}`,
-        `Fit score: ${recommendation.fitScore}%`,
-        `Summary: ${recommendation.summary}`,
-        `Salary range: ${formatSalaryRange(recommendation.salaryRange)}`,
-        '',
-        'Why it fits:',
-        reasons,
-        '',
-        'Watch-outs:',
-        concerns,
-        '',
-        'Next steps:',
-        steps,
-      ].join('\n');
-    }).join('\n\n')
-    : 'No recommendations were generated for this session.';
+          return [
+            `## ${index + 1}. ${recommendation.title}`,
+            `Fit score: ${recommendation.fitScore}%`,
+            `Summary: ${recommendation.summary}`,
+            `Salary range: ${formatSalaryRange(recommendation.salaryRange)}`,
+            "",
+            "Why it fits:",
+            reasons,
+            "",
+            "Watch-outs:",
+            concerns,
+            "",
+            "Next steps:",
+            steps,
+          ].join("\n");
+        })
+        .join("\n\n")
+    : "No recommendations were generated for this session.";
 
   const resourcesSection = CAREER_RESOURCES.map(
-    (resource) => `- ${resource.title}\n  ${resource.url}\n  ${resource.description}`,
-  ).join('\n\n');
+    (resource) =>
+      `- ${resource.title}\n  ${resource.url}\n  ${resource.description}`,
+  ).join("\n\n");
 
   return [
-    '# Career Guidance Report',
-    '',
+    "# Career Guidance Report",
+    "",
     `Session ID: ${session.id}`,
-    `Track: ${session.trackId ?? 'general'}`,
+    `Track: ${session.trackId ?? "general"}`,
     `Created: ${session.createdAt}`,
     `Updated: ${session.updatedAt}`,
-    '',
-    '## Profile Snapshot',
-    '',
-    'Interests:',
+    "",
+    "## Profile Snapshot",
+    "",
+    "Interests:",
     formatList(interests),
-    '',
-    'Values:',
+    "",
+    "Values:",
     formatList(values),
-    '',
-    'Hard skills:',
+    "",
+    "Hard skills:",
     formatList(hardSkills),
-    '',
-    'Soft skills:',
+    "",
+    "Soft skills:",
     formatList(softSkills),
-    '',
-    '## Top Career Matches',
-    '',
+    "",
+    "## Top Career Matches",
+    "",
     recommendationSections,
-    '',
-    '## Action Plan',
-    '',
-    actionSteps.length ? formatList(actionSteps) : 'No next steps were generated.',
-    '',
-    '## Useful Career Resources',
-    '',
+    "",
+    "## Action Plan",
+    "",
+    actionSteps.length
+      ? formatList(actionSteps)
+      : "No next steps were generated.",
+    "",
+    "## Useful Career Resources",
+    "",
     resourcesSection,
-    '',
-    '## Notes',
-    '',
-    'This report was generated from the completed assessment and is suitable for download, sharing, or printing to PDF.',
-  ].join('\n');
+    "",
+    "## Notes",
+    "",
+    "This report was generated from the completed assessment and is suitable for download, sharing, or printing to PDF.",
+  ].join("\n");
 }
 
-function markdownLineToText(line: string): { text: string; bold: boolean; size: number; indent: number } {
-  if (line.startsWith('# ')) {
+function markdownLineToText(line: string): {
+  text: string;
+  bold: boolean;
+  size: number;
+  indent: number;
+} {
+  if (line.startsWith("# ")) {
     return { text: line.slice(2), bold: true, size: 20, indent: 0 };
   }
 
-  if (line.startsWith('## ')) {
+  if (line.startsWith("## ")) {
     return { text: line.slice(3), bold: true, size: 13, indent: 0 };
   }
 
-  if (line.startsWith('- ')) {
+  if (line.startsWith("- ")) {
     return { text: `• ${line.slice(2)}`, bold: false, size: 10, indent: 10 };
   }
 
@@ -208,60 +225,116 @@ function extractUrl(line: string): string | null {
 
 function createPdfBufferFromMarkdown(markdown: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 48, autoFirstPage: true });
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 48,
+      autoFirstPage: true,
+    });
     const chunks: Buffer[] = [];
 
-    doc.on('data', (chunk: Buffer | Uint8Array) => {
+    doc.on("data", (chunk: Buffer | Uint8Array) => {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
 
-    doc.on('end', () => {
+    doc.on("end", () => {
       resolve(Buffer.concat(chunks));
     });
 
-    doc.on('error', reject);
+    doc.on("error", reject);
 
-    doc.info.Title = 'Career Guidance Report';
-    doc.info.Author = 'PathFinder AI';
-    doc.info.Subject = 'Career recommendations and action plan';
+    doc.info.Title = "Career Guidance Report";
+    doc.info.Author = "PathFinder AI";
+    doc.info.Subject = "Career recommendations and action plan";
 
-    // Set default link color for all URLs in the document
-    const lines = markdown.split('\n');
+    // ── Header with branding ──
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(18)
+      .fillColor("#2c5aa0")
+      .text("PathFinder AI", 48, 48);
+
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("#666666")
+      .text("Career Guidance Report", 48, 70);
+
+    // Vertical line separator
+    doc.moveTo(48, 85).lineTo(550, 85).strokeColor("#e0e0e0").stroke();
+
+    doc.moveDown(1);
+
+    // ── Content ──
+    const lines = markdown.split("\n");
     for (const line of lines) {
-      if (line.trim() === '') {
+      if (line.trim() === "") {
         doc.moveDown(0.45);
         continue;
       }
 
       const style = markdownLineToText(line);
+
+      // Color-code fit scores (e.g., "Fit score: 85%")
+      let displayText = style.text;
+      let textColor = "#333333";
+
+      if (displayText.includes("Fit score:")) {
+        const scoreMatch = displayText.match(/(\d+)%/);
+        if (scoreMatch) {
+          const score = parseInt(scoreMatch[1]);
+          if (score >= 80) {
+            textColor = "#2ecc71"; // Green for high fit
+          } else if (score >= 60) {
+            textColor = "#f39c12"; // Orange for medium fit
+          } else {
+            textColor = "#e74c3c"; // Red for low fit
+          }
+        }
+      }
+
       const url = extractUrl(line);
 
       doc
-        .font(style.bold ? 'Helvetica-Bold' : 'Helvetica')
-        .fontSize(style.size);
+        .font(style.bold ? "Helvetica-Bold" : "Helvetica")
+        .fontSize(style.size)
+        .fillColor(textColor);
 
       // If there's a URL in the line, create a hyperlink
       if (url) {
-        // Get the current position before writing
-        const x = doc.x + style.indent;
-        const y = doc.y;
-        
         // Write the text with underline to indicate it's a link
-        doc.text(style.text, x, y, {
+        doc.fillColor("#1a56db").text(displayText, {
           indent: style.indent,
           lineGap: 2,
           underline: true,
           link: url,
         });
+        // Reset color so subsequent text keeps semantic styling.
+        doc.fillColor("#333333");
       } else {
         // Regular text without hyperlink
-        doc.text(style.text, { indent: style.indent, lineGap: 2 });
+        doc.text(displayText, { indent: style.indent, lineGap: 2 });
       }
 
       if (style.size >= 13) {
         doc.moveDown(0.2);
       }
     }
+
+    // ── Footer ──
+    const timestamp = new Date().toLocaleString();
+    doc
+      .font("Helvetica")
+      .fontSize(8)
+      .fillColor("#999999")
+      .text(
+        `Generated by PathFinder AI on ${timestamp}`,
+        48,
+        doc.page.height - 40,
+        {
+          align: "center",
+          lineGap: 0,
+        },
+      );
 
     doc.end();
   });
@@ -357,7 +430,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
   // ── GET /sessions/:id/report ───────────────────────────────────
   app.get<{ Params: { id: string } }>(
-    '/sessions/:id/report',
+    "/sessions/:id/report",
     async (req, reply) => {
       const row = await db
         .select()
@@ -365,9 +438,9 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         .where(eq(sessions.id, req.params.id))
         .get();
 
-      if (!row) return reply.notFound('Session not found');
+      if (!row) return reply.notFound("Session not found");
 
-      if (row.status !== 'complete') {
+      if (row.status !== "complete") {
         return reply.badRequest(
           `Report not ready. Current status: '${row.status}'. Must be 'complete'.`,
         );
@@ -387,10 +460,10 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       const pdfBuffer = await createPdfBufferFromMarkdown(markdown);
       const filename = `career-report-${row.id.slice(0, 8)}.pdf`;
 
-      reply.header('Content-Type', 'application/pdf');
-      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
-      reply.header('Cache-Control', 'no-store');
-      reply.header('Content-Length', String(pdfBuffer.byteLength));
+      reply.header("Content-Type", "application/pdf");
+      reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+      reply.header("Cache-Control", "no-store");
+      reply.header("Content-Length", String(pdfBuffer.byteLength));
 
       return reply.send(pdfBuffer);
     },
@@ -597,10 +670,8 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         return;
       }
 
-      // ── Live mode: poll agent service with 55s hard timeout + personalized fallback ──
-      // Allows agent service (Claude ~5s + Browser Use enrichment if available) to complete
-      // within the 1-minute analysis SLA. Background guard at 45s catches truly stuck sessions.
-      const ANALYSIS_TIMEOUT_MS = 55_000;
+      // ── Live mode: poll agent service with 20s hard timeout + personalized fallback ──
+      const ANALYSIS_TIMEOUT_MS = 20_000;
       const POLL_INTERVAL_MS = 2_000;
       const MAX_POLL_FAILURES = 3;
 
@@ -621,6 +692,15 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
           { sessionId: req.params.id, reason },
           "Analysis fallback triggered",
         );
+
+        send({
+          type: "fallback_activated",
+          payload: {
+            message:
+              "Analysis took longer than expected. Using optimized recommendations…",
+            reason,
+          },
+        });
 
         send({
           type: "progress",
@@ -695,24 +775,13 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
             let usedFallback = false;
 
             const agentRecs = agentStatus.recommendations ?? [];
-            const passesContract = meetsPersonalizationContract(
-              agentRecs,
-              profile,
-              trackId,
-            );
 
-            if (agentRecs.length && passesContract) {
-              // Live recs pass personalization contract — apply track enrichment
+            if (agentRecs.length) {
+              // Live recs available — apply track enrichment
               const adapter = getAdapter(trackId ?? "general");
               recs = await adapter.enrich(profile, agentRecs);
             } else {
-              // Agent returned no recs, or recs failed personalization contract — use fallback
-              if (agentRecs.length && !passesContract) {
-                app.log.warn(
-                  { sessionId: req.params.id, recCount: agentRecs.length },
-                  "Live recs failed personalization contract — substituting personalized fallback",
-                );
-              }
+              // Agent returned no recs — use personalized fallback
               const rawRecs = generatePersonalizedFallback(profile, trackId);
               const adapter = getAdapter(trackId ?? "general");
               recs = await adapter.enrich(profile, rawRecs);
@@ -810,8 +879,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
       // Background guard: finalize stale analyzing sessions even if SSE stream is
       // not connected or disconnects before fallback can run.
-      // Set at 50s to allow SSE timeout (55s) to complete first, but still catch runaway agents.
-      const BACKGROUND_ANALYSIS_GUARD_MS = 50_000;
+      const BACKGROUND_ANALYSIS_GUARD_MS = 20_000;
       setTimeout(() => {
         void (async () => {
           const current = await db
@@ -884,13 +952,24 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
       if (!row) return reply.notFound("Session not found");
 
+      if (row.status === "analyzing") {
+        return reply.code(202).send({
+          status: "pending",
+          retryAfterMs: 1000,
+          message: "Recommendations are still being generated.",
+        });
+      }
+
       if (row.status !== "complete") {
         return reply.badRequest(
-          `Recommendations not ready. Current status: '${row.status}'. Must be 'complete'.`,
+          `Recommendations unavailable in '${row.status}' status. Session must be 'analyzing' or 'complete'.`,
         );
       }
 
-      const recs = parseJson<CareerRecommendation[]>(row.recommendations ?? "[]", []);
+      const recs = parseJson<CareerRecommendation[]>(
+        row.recommendations ?? "[]",
+        [],
+      );
       return reply.send(recs);
     },
   );

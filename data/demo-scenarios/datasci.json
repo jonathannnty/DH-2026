@@ -1,0 +1,24 @@
+{
+  "id": "data-scientist-scenario",
+  "name": "Data Scientist Profile",
+  "description": "Analytical professional obsessed with turning data into insights",
+  "profile": {
+    "interests": "machine learning, data visualization, statistical analysis, business intelligence, automation",
+    "values": "rigor, evidence-based decision making, continuous improvement, intellectual challenge",
+    "workingStyle": "independent research with periodic team collaboration",
+    "hardSkills": "Python, R, SQL, statistical analysis, machine learning, Tableau/Power BI",
+    "softSkills": "communication, translating technical concepts, storytelling with data, collaboration",
+    "riskTolerance": "low-medium — prefers experimental approach within guardrails",
+    "salaryExpectations": {
+      "minimum": 85000,
+      "target": 145000,
+      "currency": "USD"
+    },
+    "geographicPreference": "flexible — open to any format",
+    "education": "Master's in Statistics, Computer Science, or related field",
+    "timeline": "medium term — within 6-12 months",
+    "purposePriorities": "uncovering insights that drive decisions, building predictive models, enabling data-driven culture",
+    "burnoutConcerns": "politics overriding data insights, repetitive analysis, unclear business context"
+  },
+  "estimatedAnalysisTime": "42 seconds"
+}

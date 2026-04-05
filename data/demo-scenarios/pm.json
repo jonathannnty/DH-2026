@@ -1,0 +1,24 @@
+{
+  "id": "pm-scenario",
+  "name": "Product Manager Profile",
+  "description": "Strategy-focused PM interested in building products that matter",
+  "profile": {
+    "interests": "product strategy, user psychology, business models, analytics, innovation",
+    "values": "impact, collaboration, driving change, continuous learning",
+    "workingStyle": "collaborative with data-driven decision making",
+    "hardSkills": "product roadmapping, data analysis, SQL basics, market research, storytelling",
+    "softSkills": "leadership, communication, negotiation, strategic thinking, empathy",
+    "riskTolerance": "medium — willing to take informed risks",
+    "salaryExpectations": {
+      "minimum": 85000,
+      "target": 140000,
+      "currency": "USD"
+    },
+    "geographicPreference": "flexible — open to major tech hubs",
+    "education": "Bachelor's in Business, Engineering, or related field",
+    "timeline": "short term — within 3-6 months",
+    "purposePriorities": "solving real user problems, building products people love, leading high-impact initiatives",
+    "burnoutConcerns": "feature factory mentality, no clear strategy, misaligned stakeholders"
+  },
+  "estimatedAnalysisTime": "38 seconds"
+}

@@ -5,7 +5,11 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { getSession, getRecommendations, downloadSessionReport } from "@/lib/api";
+import {
+  getSession,
+  getRecommendationsWithRetry,
+  downloadSessionReport,
+} from "@/lib/api";
 import { useSessionStream } from "@/hooks/useSessionStream";
 import { useTrack } from "@/hooks/useTrack";
 import { motion, useReducedMotion } from "framer-motion";
@@ -113,6 +117,20 @@ const reportNote: React.CSSProperties = {
   color: "var(--pf-color-text-muted)",
 };
 
+const opsPanel: React.CSSProperties = {
+  marginTop: 24,
+  border: "1px solid var(--pf-surface-card-border)",
+  borderRadius: "var(--pf-radius-md)",
+  background: "var(--pf-color-bg-subtle)",
+  padding: "14px 16px",
+};
+
+type OpsEvent = {
+  time: string;
+  message: string;
+  level: "info" | "warn" | "error";
+};
+
 // ─── Sub-components ───────────────────────────────────────────────
 
 function ScoreBadge({ score }: { score: number }) {
@@ -197,6 +215,8 @@ function TrackBanner({ track }: { track: SponsorTrack }) {
 // ─── Main component ───────────────────────────────────────────────
 
 export default function Results() {
+  const USER_VISIBLE_RECOVERY_MS = 12_000;
+  const HARD_RECOVERY_MS = 20_000;
   const reduceMotion = useReducedMotion();
   const { sessionId } = useParams<{ sessionId: string }>();
   const [searchParams] = useSearchParams();
@@ -210,9 +230,25 @@ export default function Results() {
   const [isFallback, setIsFallback] = useState(false);
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  // Stuck-analyzer: if no SSE progress after 35s, show recovery UI instead of spinning forever
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [opsEvents, setOpsEvents] = useState<OpsEvent[]>([]);
+  // Stuck-analyzer: if no SSE progress after 12s, show recovery UI instead of spinning forever.
   const [isStuck, setIsStuck] = useState(false);
   const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showOpsPanel = searchParams.get("ops") === "1";
+
+  const appendOpsEvent = (
+    message: string,
+    level: OpsEvent["level"] = "info",
+  ) => {
+    const event: OpsEvent = {
+      message,
+      level,
+      time: new Date().toLocaleTimeString(),
+    };
+    setOpsEvents((prev) => [...prev.slice(-11), event]);
+  };
 
   const track = useTrack(session?.trackId);
   const shouldStream = session?.status === "analyzing";
@@ -237,18 +273,24 @@ export default function Results() {
   useEffect(() => {
     if (!sessionId) return;
     getSession(sessionId)
-      .then(setSession)
+      .then((s) => {
+        setSession(s);
+        appendOpsEvent(`Session loaded with status '${s.status}'.`);
+      })
       .catch(() => setFetchError("Session not found or unavailable."));
   }, [sessionId]);
 
   // Stuck-analyzer timer: starts when SSE opens, resets on each progress event,
-  // fires after 35s of silence to show recovery UI instead of an endless spinner.
+  // fires after 12s of silence to show recovery UI instead of an endless spinner.
   useEffect(() => {
     if (stream.status !== "open") return;
 
     const arm = () => {
       if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
-      stuckTimerRef.current = setTimeout(() => setIsStuck(true), 35_000);
+      stuckTimerRef.current = setTimeout(
+        () => setIsStuck(true),
+        USER_VISIBLE_RECOVERY_MS,
+      );
     };
 
     arm();
@@ -262,8 +304,11 @@ export default function Results() {
     if (stream.latestEvent?.type !== "progress") return;
     setIsStuck(false);
     if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
-    stuckTimerRef.current = setTimeout(() => setIsStuck(true), 35_000);
-  }, [stream.latestEvent]);
+    stuckTimerRef.current = setTimeout(
+      () => setIsStuck(true),
+      USER_VISIBLE_RECOVERY_MS,
+    );
+  }, [stream.latestEvent, USER_VISIBLE_RECOVERY_MS]);
 
   // React to SSE events
   useEffect(() => {
@@ -273,29 +318,65 @@ export default function Results() {
     if (type === "progress") {
       setProgress((payload as { progress?: number }).progress ?? 0);
       setStage((payload as { stage?: string }).stage ?? "Processing…");
+      appendOpsEvent(
+        `SSE progress: ${
+          (payload as { progress?: number }).progress ?? 0
+        }% — ${(payload as { stage?: string }).stage ?? "Processing"}`,
+      );
+    }
+
+    if (type === "fallback_activated") {
+      setIsFallback(true);
+      const message =
+        (payload as { message?: string }).message ??
+        "Using optimized recommendations…";
+      appendOpsEvent(`Fallback activated: ${message}`, "warn");
     }
 
     if (type === "complete" && sessionId) {
       if ((payload as { isFallback?: boolean }).isFallback) setIsFallback(true);
-
-      // Fetch session first so status is updated before recommendations are fetched.
-      // Then retry recommendations once with a 1.5s delay if the first attempt fails —
-      // guards against any residual timing skew between the SSE emit and DB visibility.
+      appendOpsEvent("SSE complete received.");
       getSession(sessionId)
-        .then(setSession)
+        .then((s) => {
+          setSession(s);
+          appendOpsEvent(`Session transitioned to '${s.status}'.`);
+        })
         .catch(() => {});
 
-      getRecommendations(sessionId)
-        .then(setRecs)
-        .catch(() =>
-          new Promise<void>((res) => setTimeout(res, 1500))
-            .then(() => getRecommendations(sessionId))
-            .then(setRecs)
-            .catch(() => setRecs([])),
-        );
+      getRecommendationsWithRetry(sessionId, {
+        maxAttempts: 6,
+        maxWaitMs: 8_000,
+        onAttempt: (event) => {
+          if (event.state === "pending") {
+            appendOpsEvent(
+              `Recommendations pending (attempt ${event.attempt}); retry in ${
+                event.retryAfterMs ?? 1000
+              }ms.`,
+              "warn",
+            );
+          }
+          if (event.state === "ready") {
+            appendOpsEvent(
+              `Recommendations ready on attempt ${event.attempt}.`,
+            );
+          }
+          if (event.state === "exhausted") {
+            appendOpsEvent("Recommendation retries exhausted.", "error");
+          }
+        },
+      })
+        .then((readyRecs) => {
+          if (readyRecs) {
+            setRecs(readyRecs);
+            return;
+          }
+          setIsStuck(true);
+        })
+        .catch(() => setRecs([]));
     }
 
     if (type === "error") {
+      appendOpsEvent("SSE error event received.", "error");
       setFetchError(
         "Analysis encountered an error. You can retry from the dashboard.",
       );
@@ -311,8 +392,25 @@ export default function Results() {
       .then((s) => {
         setSession(s);
         if (s.status === "complete") {
-          getRecommendations(sessionId)
-            .then(setRecs)
+          getRecommendationsWithRetry(sessionId, {
+            maxAttempts: 4,
+            maxWaitMs: 6_000,
+            onAttempt: (event) => {
+              if (event.state === "pending") {
+                appendOpsEvent(
+                  `Reconnect fetch pending (attempt ${event.attempt}).`,
+                  "warn",
+                );
+              }
+            },
+          })
+            .then((readyRecs) => {
+              if (readyRecs) {
+                setRecs(readyRecs);
+                return;
+              }
+              setIsStuck(true);
+            })
             .catch(() => setRecs([]));
         }
       })
@@ -322,7 +420,7 @@ export default function Results() {
   }, [stream.status, recs, fetchError, sessionId]);
 
   // Reconciliation loop: if session remains in "analyzing", poll session status
-  // for up to 60s so tracks do not appear stuck when SSE is interrupted.
+  // for up to 20s so tracks do not appear stuck when SSE is interrupted.
   useEffect(() => {
     if (!sessionId || recs || fetchError) return;
     if (session?.status !== "analyzing") return;
@@ -338,10 +436,25 @@ export default function Results() {
         setSession(latest);
 
         if (latest.status === "complete") {
-          const recommendations = await getRecommendations(sessionId);
+          const recommendations = await getRecommendationsWithRetry(sessionId, {
+            maxAttempts: 4,
+            maxWaitMs: 6_000,
+            onAttempt: (event) => {
+              if (event.state === "pending") {
+                appendOpsEvent(
+                  `Reconciliation pending (attempt ${event.attempt}).`,
+                  "warn",
+                );
+              }
+            },
+          });
           if (!active) return;
-          setRecs(recommendations);
-          setIsStuck(false);
+          if (recommendations) {
+            setRecs(recommendations);
+            setIsStuck(false);
+          } else {
+            setIsStuck(true);
+          }
           return;
         }
 
@@ -352,23 +465,23 @@ export default function Results() {
           return;
         }
 
-        if (Date.now() - startedAt >= 60_000) {
+        if (Date.now() - startedAt >= HARD_RECOVERY_MS) {
           setIsStuck(true);
           return;
         }
 
         window.setTimeout(() => {
           void pollForCompletion();
-        }, 3000);
+        }, 2000);
       } catch {
-        if (Date.now() - startedAt >= 60_000) {
+        if (Date.now() - startedAt >= HARD_RECOVERY_MS) {
           setIsStuck(true);
           return;
         }
 
         window.setTimeout(() => {
           void pollForCompletion();
-        }, 3000);
+        }, 2000);
       }
     };
 
@@ -377,15 +490,32 @@ export default function Results() {
     return () => {
       active = false;
     };
-  }, [sessionId, session?.status, recs, fetchError]);
+  }, [sessionId, session?.status, recs, fetchError, HARD_RECOVERY_MS]);
 
   // If session is already complete on load
   useEffect(() => {
     if (!session) return;
 
     if (session.status === "complete" && !recs && sessionId) {
-      getRecommendations(sessionId)
-        .then(setRecs)
+      getRecommendationsWithRetry(sessionId, {
+        maxAttempts: 4,
+        maxWaitMs: 6_000,
+        onAttempt: (event) => {
+          if (event.state === "pending") {
+            appendOpsEvent(
+              `Initial complete fetch pending (attempt ${event.attempt}).`,
+              "warn",
+            );
+          }
+        },
+      })
+        .then((readyRecs) => {
+          if (readyRecs) {
+            setRecs(readyRecs);
+            return;
+          }
+          setIsStuck(true);
+        })
         .catch(() => setRecs([]));
     }
 
@@ -485,7 +615,7 @@ export default function Results() {
   ) {
     const accentColor = track?.color ?? "var(--pf-color-brand-500)";
 
-    // Stuck: SSE has been silent for 35s — show recovery options instead of infinite spinner
+    // Stuck: SSE has been silent for 12s — show recovery options instead of infinite spinner
     if (isStuck) {
       return (
         <div style={{ ...wrap, ...centered }}>
@@ -518,8 +648,17 @@ export default function Results() {
                     .then((s) => {
                       setSession(s);
                       if (s.status === "complete") {
-                        getRecommendations(sessionId)
-                          .then(setRecs)
+                        getRecommendationsWithRetry(sessionId, {
+                          maxAttempts: 4,
+                          maxWaitMs: 6_000,
+                        })
+                          .then((readyRecs) => {
+                            if (readyRecs) {
+                              setRecs(readyRecs);
+                              return;
+                            }
+                            setIsStuck(true);
+                          })
                           .catch(() => setRecs([]));
                       }
                     })
@@ -662,12 +801,50 @@ export default function Results() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      appendOpsEvent("PDF report downloaded.");
     } catch (err) {
       setDownloadError(
-        err instanceof Error ? err.message : "Failed to download report"
+        err instanceof Error ? err.message : "Failed to download report",
       );
+      appendOpsEvent("PDF report download failed.", "error");
     } finally {
       setIsDownloadingReport(false);
+    }
+  };
+
+  const handleCopySummary = async () => {
+    if (!session) return;
+
+    const recommendationText = resolvedRecs
+      .slice(0, 3)
+      .map(
+        (rec, index) =>
+          `${index + 1}. ${rec.title} (${rec.fitScore}% fit)\n${rec.summary}`,
+      )
+      .join("\n\n");
+
+    const text = [
+      "PathFinder AI — Career Recommendation Summary",
+      `Session: ${session.id}`,
+      `Track: ${session.trackId ?? "general"}`,
+      "",
+      recommendationText,
+    ].join("\n");
+
+    setCopyError(null);
+    setCopyStatus(null);
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus("✓ Summary copied!");
+      appendOpsEvent("Recommendation summary copied to clipboard.");
+      // Auto-dismiss success message after 2.5 seconds
+      setTimeout(() => setCopyStatus(null), 2500);
+    } catch {
+      setCopyError("Clipboard access failed. Download the PDF instead.");
+      appendOpsEvent("Clipboard copy failed.", "warn");
+      // Auto-dismiss error message after 4 seconds
+      setTimeout(() => setCopyError(null), 4000);
     }
   };
 
@@ -690,10 +867,6 @@ export default function Results() {
         <p style={{ color: "var(--pf-color-text-muted)", maxWidth: 540 }}>
           Each match is scored across 12 profile dimensions. The top result is
           your strongest fit based on skills, values, and goals.
-        </p>
-        <p style={{ color: "var(--pf-color-text-muted)", maxWidth: 540 }}>
-          Each match is scored across 12 profile dimensions. The top result is
-          your strongest fit based on skills, values, goals, and market research.
         </p>
         <p
           style={{
@@ -720,9 +893,41 @@ export default function Results() {
           <span style={reportNote}>
             Downloads a PDF report you can share or print.
           </span>
+          <button
+            type="button"
+            onClick={handleCopySummary}
+            style={{
+              ...reportButton,
+              background: "var(--pf-btn-secondary-bg)",
+              color: "var(--pf-btn-secondary-text)",
+              border: "1px solid var(--pf-btn-secondary-border)",
+            }}
+          >
+            Copy Summary
+          </button>
         </div>
+        {copyStatus && (
+          <p style={{ ...reportNote, marginTop: 10 }}>{copyStatus}</p>
+        )}
+        {copyError && (
+          <p
+            style={{
+              ...reportNote,
+              color: "var(--pf-color-danger-500)",
+              marginTop: 10,
+            }}
+          >
+            {copyError}
+          </p>
+        )}
         {downloadError && (
-          <p style={{ ...reportNote, color: "var(--pf-color-danger-500)", marginTop: 10 }}>
+          <p
+            style={{
+              ...reportNote,
+              color: "var(--pf-color-danger-500)",
+              marginTop: 10,
+            }}
+          >
             {downloadError}
           </p>
         )}
@@ -947,6 +1152,43 @@ export default function Results() {
           View all sessions
         </Link>
       </div>
+
+      {showOpsPanel && (
+        <section style={opsPanel} aria-live="polite">
+          <h2
+            style={{ fontSize: "0.95rem", fontWeight: 700, marginBottom: 10 }}
+          >
+            Demo observability
+          </h2>
+          <div style={{ display: "grid", gap: 6 }}>
+            {opsEvents.length === 0 && (
+              <p style={{ ...reportNote, margin: 0 }}>Waiting for events…</p>
+            )}
+            {opsEvents.map((event, index) => (
+              <div
+                key={`${event.time}-${index}`}
+                style={{ fontSize: "0.78rem" }}
+              >
+                <span style={{ color: "var(--pf-color-text-muted)" }}>
+                  [{event.time}]
+                </span>{" "}
+                <span
+                  style={{
+                    color:
+                      event.level === "error"
+                        ? "var(--pf-color-danger-500)"
+                        : event.level === "warn"
+                          ? "var(--pf-color-warning-500)"
+                          : "var(--pf-color-text-primary)",
+                  }}
+                >
+                  {event.message}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </motion.div>
   );
 }

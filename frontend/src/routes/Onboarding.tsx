@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { getSession, sendMessage, triggerAnalysis, prefetchResearch } from "@/lib/api";
+import {
+  getSession,
+  sendMessage,
+  triggerAnalysis,
+  prefetchResearch,
+} from "@/lib/api";
 import { ApiError } from "@/lib/api";
 import type { ChatMessage, CareerProfile } from "@/schemas/career";
 import { useTrack } from "@/hooks/useTrack";
@@ -91,6 +96,18 @@ const profileBar: React.CSSProperties = {
 function filledCount(profile: CareerProfile): number {
   return Object.values(profile).filter((v) => v !== undefined && v !== null)
     .length;
+}
+
+function validateDraftAnswer(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return "Please enter an answer before sending.";
+  if (trimmed.length < 3) {
+    return "Please add a little more detail so recommendations can be personalized.";
+  }
+  if (trimmed.length > 500) {
+    return "Please keep each answer under 500 characters.";
+  }
+  return null;
 }
 
 function SkeletonBubble({ align }: { align: "left" | "right" }) {
@@ -209,11 +226,17 @@ export default function Onboarding() {
       messageCount: messages.length,
     });
 
-    if (
-      !input.trim() ||
-      !sessionId ||
-      !canPerformUiAction("send-message", { onboarding: onboardingState })
-    ) {
+    if (!sessionId) {
+      return;
+    }
+
+    const validationError = validateDraftAnswer(input);
+    if (validationError) {
+      setSendError(validationError);
+      return;
+    }
+
+    if (!canPerformUiAction("send-message", { onboarding: onboardingState })) {
       return;
     }
 
@@ -293,7 +316,9 @@ export default function Onboarding() {
       if (err instanceof ApiError && err.status === 503) {
         try {
           const parsed = JSON.parse(err.message) as { message?: string };
-          if (parsed.message?.includes("Agentverse-backed analysis is not ready")) {
+          if (
+            parsed.message?.includes("Agentverse-backed analysis is not ready")
+          ) {
             setAnalyzeError("Agentverse pipeline is not ready.");
             return;
           }
@@ -331,9 +356,11 @@ export default function Onboarding() {
     profileFieldCount: filledCount(profile),
     messageCount: messages.length,
   });
+  const draftValidationError = validateDraftAnswer(input);
   const canSendMessage =
     canPerformUiAction("send-message", { onboarding: onboardingState }) &&
-    input.trim().length > 0;
+    input.trim().length > 0 &&
+    !draftValidationError;
   const canTriggerAnalysis = canPerformUiAction("trigger-analysis", {
     onboarding: onboardingState,
   });
@@ -655,27 +682,45 @@ export default function Onboarding() {
           )}
         </div>
       ) : (
-        <div style={inputBar}>
-          <input
-            style={inputStyle}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={sending ? "" : "Type your answer and press Enter..."}
-            disabled={
-              !canPerformUiAction("send-message", {
-                onboarding: onboardingState,
-              })
-            }
-            autoFocus
-          />
-          <button
-            style={sendBtnStyle(!canSendMessage)}
-            onClick={handleSend}
-            disabled={!canSendMessage}
-          >
-            Send
-          </button>
+        <div>
+          <div style={inputBar}>
+            <input
+              style={inputStyle}
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                if (sendError) setSendError(null);
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder={sending ? "" : "Type your answer and press Enter..."}
+              disabled={
+                !canPerformUiAction("send-message", {
+                  onboarding: onboardingState,
+                })
+              }
+              autoFocus
+              aria-invalid={Boolean(input.trim() && draftValidationError)}
+            />
+            <button
+              style={sendBtnStyle(!canSendMessage)}
+              onClick={handleSend}
+              disabled={!canSendMessage}
+            >
+              Send
+            </button>
+          </div>
+          {input.trim() && draftValidationError && (
+            <p
+              style={{
+                color: "var(--pf-color-warning-500)",
+                fontSize: "0.8rem",
+                marginTop: -8,
+                marginBottom: 10,
+              }}
+            >
+              {draftValidationError}
+            </p>
+          )}
         </div>
       )}
     </div>

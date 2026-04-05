@@ -103,6 +103,84 @@ export async function getRecommendations(
   return CareerRecommendationSchema.array().parse(data);
 }
 
+type RecommendationsFetchResult =
+  | { state: "ready"; recommendations: CareerRecommendation[] }
+  | { state: "pending"; retryAfterMs: number };
+
+export interface RecommendationRetryEvent {
+  attempt: number;
+  state: "pending" | "ready" | "exhausted";
+  retryAfterMs?: number;
+}
+
+export async function getRecommendationsWithStatus(
+  sessionId: string,
+): Promise<RecommendationsFetchResult> {
+  const res = await fetch(`${BASE_URL}/sessions/${sessionId}/recommendations`);
+
+  if (res.status === 202) {
+    const pending = (await res.json().catch(() => ({}))) as {
+      retryAfterMs?: unknown;
+    };
+    const retryAfterMs =
+      typeof pending.retryAfterMs === "number" && pending.retryAfterMs > 0
+        ? pending.retryAfterMs
+        : 1000;
+    return { state: "pending", retryAfterMs };
+  }
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new ApiError(res.status, body);
+  }
+
+  const data = await res.json();
+  return {
+    state: "ready",
+    recommendations: CareerRecommendationSchema.array().parse(data),
+  };
+}
+
+export async function getRecommendationsWithRetry(
+  sessionId: string,
+  options?: {
+    maxAttempts?: number;
+    maxWaitMs?: number;
+    onAttempt?: (event: RecommendationRetryEvent) => void;
+  },
+): Promise<CareerRecommendation[] | null> {
+  const maxAttempts = options?.maxAttempts ?? 5;
+  const maxWaitMs = options?.maxWaitMs ?? 8000;
+  const onAttempt = options?.onAttempt;
+  const startedAt = Date.now();
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const result = await getRecommendationsWithStatus(sessionId);
+    if (result.state === "ready") {
+      onAttempt?.({ attempt, state: "ready" });
+      return result.recommendations;
+    }
+
+    onAttempt?.({
+      attempt,
+      state: "pending",
+      retryAfterMs: result.retryAfterMs,
+    });
+
+    const elapsed = Date.now() - startedAt;
+    if (attempt === maxAttempts || elapsed >= maxWaitMs) {
+      onAttempt?.({ attempt, state: "exhausted" });
+      return null;
+    }
+
+    const remaining = maxWaitMs - elapsed;
+    const waitMs = Math.min(result.retryAfterMs, remaining);
+    await new Promise((resolve) => window.setTimeout(resolve, waitMs));
+  }
+
+  return null;
+}
+
 export async function downloadSessionReport(
   sessionId: string,
 ): Promise<{ blob: Blob; filename: string }> {
@@ -113,7 +191,7 @@ export async function downloadSessionReport(
   }
 
   const blob = await res.blob();
-  const disposition = res.headers.get('content-disposition') ?? '';
+  const disposition = res.headers.get("content-disposition") ?? "";
   const match = disposition.match(/filename="?([^";]+)"?/i);
 
   return {
