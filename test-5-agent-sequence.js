@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Test the 5-Agent Sequence
+ * Test the 4-Agent Sequence
  *
  * This script demonstrates the complete flow:
  * 1. Create session
  * 2. Build profile via intake messages
- * 3. Trigger 5-agent analysis (Research → Profile Analysis → Recommendations → Verification → Report)
+ * 3. Trigger 4-agent analysis (Research → Profile Analysis → Recommendations+Validation → Report)
  * 4. Stream status and show each agent's output
  */
 
@@ -121,7 +121,7 @@ async function step2_BuildProfile() {
 }
 
 async function step3_TriggerAnalysis() {
-  console.log('\n🚀 Step 3: Trigger 5-Agent Analysis');
+  console.log('\n🚀 Step 3: Trigger 4-Agent Analysis');
   console.log('─'.repeat(50));
 
   const res = await makeRequest('POST', `/sessions/${sessionId}/analyze`);
@@ -132,12 +132,11 @@ async function step3_TriggerAnalysis() {
   }
 
   console.log('✓ Analysis triggered!');
-  console.log('  The 5 agents are now running in sequence:');
+  console.log('  The 4 agents are now running in sequence:');
   console.log('  1️⃣  Research Agent (market trends, salaries, companies)');
   console.log('  2️⃣  Profile Analysis Agent (strengths, patterns, gaps)');
-  console.log('  3️⃣  Recommendations Agent (career paths, next steps)');
-  console.log('  4️⃣  Verification Agent (data validation, consistency)');
-  console.log('  5️⃣  Report Generation Agent (final synthesized report)');
+  console.log('  3️⃣  Recommendations Agent (career paths, next steps, validation checks)');
+  console.log('  4️⃣  Report Generation Agent (final synthesized report)');
 }
 
 async function step4_ConsumeStream() {
@@ -284,12 +283,12 @@ async function step6_DisplayResults() {
     });
   }
 
-  console.log('\n4️⃣  VERIFICATION AGENT OUTPUT:');
+  console.log('\n4️⃣  INTEGRATED VALIDATION OUTPUT (FROM RECOMMENDATIONS):');
   console.log('─'.repeat(50));
   console.log('  ✓ Data validation completed');
   console.log('  ✓ Consistency checks passed');
 
-  console.log('\n5️⃣  REPORT GENERATION AGENT OUTPUT:');
+  console.log('\n4️⃣  REPORT GENERATION AGENT OUTPUT:');
   console.log('─'.repeat(50));
   console.log('  📋 Career Guidance Report Generated');
   console.log(`     Session ID: ${sessionId}`);
@@ -298,7 +297,7 @@ async function step6_DisplayResults() {
   console.log(`     Updated: ${session.updatedAt}`);
 
   console.log('\n' + '═'.repeat(50));
-  console.log('✅ Full 5-Agent Sequence Complete!');
+  console.log('✅ Full 4-Agent Sequence Complete!');
   console.log('═'.repeat(50));
 }
 
@@ -306,7 +305,7 @@ async function step6_DisplayResults() {
 
 async function main() {
   console.log('╔════════════════════════════════════════════════╗');
-  console.log('║     5-Agent Career Guidance System - Test      ║');
+  console.log('║     4-Agent Career Guidance System - Test      ║');
   console.log('╚════════════════════════════════════════════════╝');
 
   try {

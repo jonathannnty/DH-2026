@@ -116,9 +116,9 @@ async def test_level_1():
             agents = data.get('agents', [])
             print_info(f"Registered agents: {', '.join(agents)}")
             
-            expected_agents = ['research', 'profile_analysis', 'recommendations', 'verification', 'report_generation']
+            expected_agents = ['research', 'profile_analysis', 'recommendations', 'report_generation']
             if all(agent in agents for agent in expected_agents):
-                print_success(f"All 5 agents registered")
+                print_success(f"All 4 agents registered")
             else:
                 print_error(f"Missing agents. Expected: {expected_agents}, Got: {agents}")
         else:
@@ -199,7 +199,7 @@ async def test_level_1():
                 
                 # Track agent transitions from results (more reliable than polling current_agent)
                 if results:
-                    expected_order = ['research', 'profile_analysis', 'recommendations', 'verification', 'report_generation']
+                    expected_order = ['research', 'profile_analysis', 'recommendations', 'report_generation']
                     for agent_name in expected_order:
                         if agent_name in results and agent_name not in agents_seen:
                             agents_seen.append(agent_name)
@@ -215,12 +215,12 @@ async def test_level_1():
                     print_info(f"Agents executed in order: {' → '.join(agents_seen)}")
                     
                     # Verify order
-                    expected_order = ['research', 'profile_analysis', 'recommendations', 'verification', 'report_generation']
+                    expected_order = ['research', 'profile_analysis', 'recommendations', 'report_generation']
                     if agents_seen == expected_order:
                         print_success("Agents executed in correct order!")
                         result = True
-                    elif len(agents_seen) == 5 and set(agents_seen) == set(expected_order):
-                        print_success("All 5 agents produced results!")
+                    elif len(agents_seen) == 4 and set(agents_seen) == set(expected_order):
+                        print_success("All 4 agents produced results!")
                         print_info(f"Note: Polling didn't capture all transitions (agents complete quickly)")
                         result = True
                     else:
@@ -468,7 +468,7 @@ async def main():
     print(f"\n{Colors.BOLD}{Colors.CYAN}")
     print("╔════════════════════════════════════════════════════════════╗")
     print("║     MULTI-AGENT SYSTEM - ALL LEVELS TESTING               ║")
-    print("║     Career Guidance 5-Agent Architecture                  ║")
+    print("║     Career Guidance 4-Agent Architecture                  ║")
     print("╚════════════════════════════════════════════════════════════╝")
     print(f"{Colors.END}")
     

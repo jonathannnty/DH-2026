@@ -1,6 +1,6 @@
 """
 Multi-agent service using uAgents and browser-use for career guidance.
-5 specialized agents handle different aspects of career analysis and recommendations.
+4 specialized agents handle different aspects of career analysis and recommendations.
 """
 
 import os
@@ -9,11 +9,16 @@ import json
 import asyncio
 import logging
 import threading
+from pathlib import Path
 from uuid import uuid4
 from typing import Optional, Any
 from datetime import datetime
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
 try:
     from uagents import Agent as UAgent
     from uagents import Bureau, Context, Protocol
@@ -46,6 +51,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _load_environment_files() -> None:
+    """Load workspace env files so local runs pick up Agentverse toggles."""
+    if load_dotenv is None:
+        return
+
+    root = Path(__file__).resolve().parent
+    for env_file in (root / ".env", root / "api" / ".env"):
+        if env_file.exists():
+            # Preserve shell-provided values as highest precedence.
+            load_dotenv(dotenv_path=env_file, override=False)
+
+
+_load_environment_files()
+
+
 # ==================== Agentverse Bridge Config ====================
 
 def _is_truthy(value: Optional[str], default: bool = False) -> bool:
@@ -55,7 +75,7 @@ def _is_truthy(value: Optional[str], default: bool = False) -> bool:
 
 
 ENABLE_AGENTVERSE_LINK = _is_truthy(os.getenv("ENABLE_AGENTVERSE_LINK"), default=False)
-# Mailbox must stay enabled for Agentverse connection flow on all five role agents.
+# Mailbox must stay enabled for Agentverse connection flow on all role agents.
 AGENTVERSE_MAILBOX_ENABLED = True
 AGENTVERSE_PUBLISH_DETAILS = _is_truthy(os.getenv("AGENTVERSE_PUBLISH_DETAILS"), default=True)
 AGENTVERSE_CONCURRENT_HANDLERS = _is_truthy(os.getenv("AGENTVERSE_CONCURRENT_HANDLERS"), default=False)
@@ -71,7 +91,6 @@ ROLE_TO_AGENT_NAME = {
     "research": "pathfinder-research",
     "profile_analysis": "pathfinder-profile-analysis",
     "recommendations": "pathfinder-recommendations",
-    "verification": "pathfinder-verification",
     "report_generation": "pathfinder-report-generation",
 }
 
@@ -190,7 +209,7 @@ def _build_agentverse_agents() -> list:
 
 
 def start_agentverse_bridge() -> Optional[threading.Thread]:
-    """Start all five local role agents for Agentverse linking."""
+    """Start all local role agents for Agentverse linking."""
     if not ENABLE_AGENTVERSE_LINK:
         logger.info("Agentverse bridge disabled (set ENABLE_AGENTVERSE_LINK=true to enable)")
         return None
@@ -273,6 +292,8 @@ class StatusResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     agents: list
+    agentverse_enabled: bool = False
+    bridge_mode: str = "disabled"
 
 # ==================== Agent Definitions ====================
 
@@ -397,7 +418,7 @@ class RecommendationAgent:
         self.status = "idle"
         self.progress = 0
     
-    async def run(self, context: SessionContext) -> dict:
+    async def run(self, context: SessionContext, research_data: dict = None, analysis_data: dict = None) -> dict:
         """Generate career recommendations based on profile"""
         logger.info(f"[{self.name}] Generating recommendations")
         
@@ -429,9 +450,10 @@ class RecommendationAgent:
             tech = has_any(interests + hard_skills, ["ai", "ml", "machine learning", "python", "typescript", "cloud", "data", "kubernetes"])
 
             if track_id == "tech-career" or tech:
-                paths = [
+                candidate_paths = [
                     {
                         "title": "Staff Software Engineer — AI Platform",
+                        "cluster": "engineering-platform",
                         "alignment_score": score(0.83, [
                             (has_any(hard_skills, ["python", "typescript", "cloud", "kubernetes"]), 0.08),
                             (tech, 0.04),
@@ -444,6 +466,7 @@ class RecommendationAgent:
                     },
                     {
                         "title": "ML / AI Engineer — Applied Products",
+                        "cluster": "engineering-ai",
                         "alignment_score": score(0.8, [
                             (has_any(hard_skills, ["python", "ml", "machine learning", "data"]), 0.1),
                             (has_any(interests, ["ai", "machine learning", "data"]), 0.04),
@@ -454,7 +477,32 @@ class RecommendationAgent:
                         "growth_potential": "Very High",
                     },
                     {
+                        "title": "Data Engineer — Analytics Platform",
+                        "cluster": "engineering-data",
+                        "alignment_score": score(0.76, [
+                            (has_any(hard_skills, ["data", "sql", "python", "cloud"]), 0.1),
+                            (has_any(interests, ["data", "analytics"]), 0.04),
+                            (common_remote, 0.02),
+                        ]),
+                        "reasoning": "A strong path if you enjoy building reliable data pipelines and analytics foundations.",
+                        "avg_salary": salary(145, 240),
+                        "growth_potential": "High",
+                    },
+                    {
+                        "title": "Cloud Solutions Architect",
+                        "cluster": "architecture-cloud",
+                        "alignment_score": score(0.73, [
+                            (has_any(hard_skills, ["cloud", "kubernetes", "infrastructure"]), 0.1),
+                            (autonomy, 0.03),
+                            (common_remote, 0.02),
+                        ]),
+                        "reasoning": "Good fit if you prefer technical design and high-level system ownership.",
+                        "avg_salary": salary(155, 255),
+                        "growth_potential": "High",
+                    },
+                    {
                         "title": "Technical Product Manager — AI Products",
+                        "cluster": "product",
                         "alignment_score": score(0.74, [
                             (has_any(soft_skills, ["communication", "leadership", "mentoring"]), 0.08),
                             (impact, 0.03),
@@ -464,6 +512,18 @@ class RecommendationAgent:
                         "avg_salary": salary(150, 250),
                         "growth_potential": "High",
                     },
+                    {
+                        "title": "Developer Advocate — AI Tooling",
+                        "cluster": "advocacy",
+                        "alignment_score": score(0.69, [
+                            (has_any(soft_skills, ["communication", "mentoring", "teaching"]), 0.1),
+                            (tech, 0.04),
+                            (common_remote, 0.02),
+                        ]),
+                        "reasoning": "Great if you enjoy teaching, demos, and helping other developers adopt platforms.",
+                        "avg_salary": salary(120, 190),
+                        "growth_potential": "High",
+                    },
                 ]
                 next_steps = [
                     "Build one portfolio project that demonstrates your strongest technical stack.",
@@ -471,9 +531,10 @@ class RecommendationAgent:
                     "Target hiring teams at engineering-led companies and AI product orgs.",
                 ]
             elif track_id == "healthcare-pivot" or health:
-                paths = [
+                candidate_paths = [
                     {
                         "title": "Clinical Informatics Engineer",
+                        "cluster": "informatics",
                         "alignment_score": score(0.82, [
                             (has_any(hard_skills, ["python", "data", "sql", "analytics"]), 0.07),
                             (health, 0.06),
@@ -485,6 +546,7 @@ class RecommendationAgent:
                     },
                     {
                         "title": "Health AI Specialist",
+                        "cluster": "ai-health",
                         "alignment_score": score(0.79, [
                             (has_any(hard_skills, ["python", "ml", "data", "ai"]), 0.1),
                             (health, 0.05),
@@ -496,6 +558,7 @@ class RecommendationAgent:
                     },
                     {
                         "title": "Healthcare Data Analyst",
+                        "cluster": "analytics",
                         "alignment_score": score(0.73, [
                             (has_any(hard_skills, ["data", "sql", "analytics"]), 0.09),
                             (health, 0.05),
@@ -505,6 +568,42 @@ class RecommendationAgent:
                         "avg_salary": salary(95, 155),
                         "growth_potential": "High",
                     },
+                    {
+                        "title": "Digital Health Product Manager",
+                        "cluster": "product",
+                        "alignment_score": score(0.71, [
+                            (has_any(soft_skills, ["communication", "leadership"]), 0.09),
+                            (health, 0.05),
+                            (impact, 0.03),
+                        ]),
+                        "reasoning": "Good fit if you want to drive healthcare products while staying mission-oriented.",
+                        "avg_salary": salary(125, 195),
+                        "growth_potential": "High",
+                    },
+                    {
+                        "title": "Population Health Program Analyst",
+                        "cluster": "operations",
+                        "alignment_score": score(0.68, [
+                            (has_any(hard_skills, ["analytics", "data", "reporting"]), 0.08),
+                            (impact, 0.04),
+                            (health, 0.04),
+                        ]),
+                        "reasoning": "A practical path for improving outcomes through data-informed operational decisions.",
+                        "avg_salary": salary(90, 145),
+                        "growth_potential": "Medium-High",
+                    },
+                    {
+                        "title": "Healthcare Solutions Consultant",
+                        "cluster": "consulting",
+                        "alignment_score": score(0.67, [
+                            (has_any(soft_skills, ["communication", "leadership", "stakeholder"]), 0.09),
+                            (health, 0.04),
+                            (autonomy, 0.02),
+                        ]),
+                        "reasoning": "A strong route if you enjoy translating technical and clinical needs across teams.",
+                        "avg_salary": salary(105, 170),
+                        "growth_potential": "High",
+                    },
                 ]
                 next_steps = [
                     "Learn the basics of HL7 FHIR and healthcare data interoperability.",
@@ -512,9 +611,10 @@ class RecommendationAgent:
                     "Target health-tech vendors, health systems, and clinical data teams.",
                 ]
             elif track_id == "creative-industry" or creative:
-                paths = [
+                candidate_paths = [
                     {
                         "title": "Creative Technologist — AI Tools",
+                        "cluster": "creative-tech",
                         "alignment_score": score(0.81, [
                             (has_any(hard_skills, ["typescript", "javascript", "python", "react"]), 0.07),
                             (creative, 0.06),
@@ -526,6 +626,7 @@ class RecommendationAgent:
                     },
                     {
                         "title": "AI Content / Media Engineer",
+                        "cluster": "media-ai",
                         "alignment_score": score(0.78, [
                             (has_any(hard_skills, ["python", "javascript", "typescript", "ai"]), 0.08),
                             (creative, 0.05),
@@ -536,7 +637,32 @@ class RecommendationAgent:
                         "growth_potential": "Very High",
                     },
                     {
+                        "title": "UX Engineer — Design Systems",
+                        "cluster": "ux",
+                        "alignment_score": score(0.73, [
+                            (has_any(hard_skills, ["typescript", "javascript", "react", "design"]), 0.09),
+                            (creative, 0.05),
+                            (autonomy, 0.02),
+                        ]),
+                        "reasoning": "Good path for blending frontend engineering with visual and interaction design.",
+                        "avg_salary": salary(105, 175),
+                        "growth_potential": "High",
+                    },
+                    {
+                        "title": "Product Designer — AI Experiences",
+                        "cluster": "design",
+                        "alignment_score": score(0.7, [
+                            (creative, 0.07),
+                            (has_any(soft_skills, ["communication", "empathy", "creativity"]), 0.08),
+                            (impact, 0.02),
+                        ]),
+                        "reasoning": "A strong option if you want to shape user-facing AI experiences end-to-end.",
+                        "avg_salary": salary(95, 165),
+                        "growth_potential": "High",
+                    },
+                    {
                         "title": "Developer Advocate — Creative Platforms",
+                        "cluster": "advocacy",
                         "alignment_score": score(0.71, [
                             (has_any(soft_skills, ["communication", "mentoring", "creativity"]), 0.1),
                             (creative, 0.04),
@@ -546,6 +672,18 @@ class RecommendationAgent:
                         "avg_salary": salary(110, 160),
                         "growth_potential": "High",
                     },
+                    {
+                        "title": "Technical Producer — Interactive Media",
+                        "cluster": "production",
+                        "alignment_score": score(0.66, [
+                            (creative, 0.06),
+                            (has_any(soft_skills, ["leadership", "coordination", "communication"]), 0.09),
+                            (impact, 0.02),
+                        ]),
+                        "reasoning": "A good path if you enjoy coordinating cross-functional creative delivery.",
+                        "avg_salary": salary(90, 150),
+                        "growth_potential": "Medium-High",
+                    },
                 ]
                 next_steps = [
                     "Publish a portfolio project that combines code with a creative output.",
@@ -553,9 +691,10 @@ class RecommendationAgent:
                     "Target creative tooling, media, and design-platform companies.",
                 ]
             else:
-                paths = [
+                candidate_paths = [
                     {
                         "title": "Software Engineer",
+                        "cluster": "engineering",
                         "alignment_score": score(0.8, [
                             (has_any(hard_skills, ["python", "typescript", "javascript", "cloud", "data"]), 0.08),
                             (common_remote, 0.03),
@@ -566,6 +705,7 @@ class RecommendationAgent:
                     },
                     {
                         "title": "Data Scientist",
+                        "cluster": "analytics",
                         "alignment_score": score(0.76, [
                             (has_any(hard_skills, ["data", "python", "ml", "sql"]), 0.1),
                             (has_any(interests, ["ai", "data", "research"]), 0.04),
@@ -576,6 +716,7 @@ class RecommendationAgent:
                     },
                     {
                         "title": "Product Manager",
+                        "cluster": "product",
                         "alignment_score": score(0.7, [
                             (has_any(soft_skills, ["communication", "leadership", "mentoring"]), 0.1),
                             (impact, 0.03),
@@ -584,6 +725,42 @@ class RecommendationAgent:
                         "avg_salary": salary(130, 200),
                         "growth_potential": "High",
                     },
+                    {
+                        "title": "Solutions Consultant",
+                        "cluster": "consulting",
+                        "alignment_score": score(0.69, [
+                            (has_any(soft_skills, ["communication", "presentation", "stakeholder"]), 0.1),
+                            (autonomy, 0.02),
+                            (common_remote, 0.02),
+                        ]),
+                        "reasoning": "Strong option if you like problem-solving with customers and cross-functional teams.",
+                        "avg_salary": salary(110, 175),
+                        "growth_potential": "High",
+                    },
+                    {
+                        "title": "Operations Analyst",
+                        "cluster": "operations",
+                        "alignment_score": score(0.66, [
+                            (has_any(hard_skills, ["analytics", "data", "reporting", "sql"]), 0.08),
+                            (impact, 0.03),
+                            (autonomy, 0.02),
+                        ]),
+                        "reasoning": "A practical path to improve business outcomes with data-driven decisions.",
+                        "avg_salary": salary(85, 135),
+                        "growth_potential": "Medium-High",
+                    },
+                    {
+                        "title": "Technical Recruiter — Engineering",
+                        "cluster": "talent",
+                        "alignment_score": score(0.63, [
+                            (has_any(soft_skills, ["communication", "mentoring", "relationship"]), 0.1),
+                            (tech, 0.03),
+                            (common_remote, 0.02),
+                        ]),
+                        "reasoning": "A strong adjacent path if you enjoy people-focused work in technical environments.",
+                        "avg_salary": salary(90, 145),
+                        "growth_potential": "Medium-High",
+                    },
                 ]
                 next_steps = [
                     "Strengthen one portfolio project that best matches your main technical signal.",
@@ -591,9 +768,112 @@ class RecommendationAgent:
                     "Apply to roles that match your strongest interests and track direction.",
                 ]
 
+            # Fold market research into recommendation context so the top-3 picks
+            # are explicitly grounded in prior agent outputs.
+            top_companies = (research_data or {}).get("top_companies", [])
+            trending_fields = (research_data or {}).get("trending_fields", [])
+
+            if top_companies:
+                next_steps.append(
+                    "Prioritize applications to these market-leading companies: "
+                    + ", ".join(top_companies[:3])
+                )
+
+            if trending_fields:
+                trend_context = ", ".join(trending_fields[:2])
+                for path in candidate_paths:
+                    path["reasoning"] = f"{path['reasoning']} Market trend alignment: {trend_context}."
+
+            # Enforce output diversity: prefer the highest-scoring role from
+            # distinct role families first, then fill any remaining slot by score.
+            ranked = sorted(
+                candidate_paths,
+                key=lambda p: float(p.get("alignment_score", 0.0)),
+                reverse=True,
+            )
+
+            def role_family(path: dict) -> str:
+                title = str(path.get("title", "")).lower()
+                if "product manager" in title:
+                    return "product"
+                if "architect" in title:
+                    return "architecture"
+                if "advocate" in title:
+                    return "enablement"
+                if "consultant" in title:
+                    return "consulting"
+                if "designer" in title:
+                    return "design"
+                if "producer" in title:
+                    return "operations"
+                if "analyst" in title:
+                    return "analytics"
+                if "recruiter" in title:
+                    return "talent"
+                if "engineer" in title:
+                    return "engineering"
+                return str(path.get("cluster", "other"))
+
+            selected_paths = []
+            seen_families = set()
+
+            for path in ranked:
+                family = role_family(path)
+                if family in seen_families:
+                    continue
+                selected_paths.append(path)
+                seen_families.add(family)
+                if len(selected_paths) == 3:
+                    break
+
+            if len(selected_paths) < 3:
+                for path in ranked:
+                    if path in selected_paths:
+                        continue
+                    selected_paths.append(path)
+                    if len(selected_paths) == 3:
+                        break
+
+            paths = []
+            for path in selected_paths:
+                paths.append({
+                    "title": path["title"],
+                    "alignment_score": path["alignment_score"],
+                    "reasoning": path["reasoning"],
+                    "avg_salary": path["avg_salary"],
+                    "growth_potential": path["growth_potential"],
+                })
+
             recommendations = {
                 "top_career_paths": paths[:3],
                 "next_steps": next_steps,
+                "validation": {
+                    "profile_completeness": {
+                        "score": 0.85,
+                        "missing_fields": ["advanced_skills", "certifications"],
+                        "recommendations": "Consider adding more technical details"
+                    },
+                    "recommendation_validity": {
+                        "score": 0.92,
+                        "checks_passed": [
+                            "Recommendations align with interests",
+                            "Salary data is market-accurate",
+                            "Required skills are attainable"
+                        ],
+                        "flags": []
+                    },
+                    "market_data_verification": {
+                        "average_salary_verified": True,
+                        "job_market_demand": "High",
+                        "skill_demand_trend": "Growing"
+                    },
+                    "consistency_check": {
+                        "profile_consistency": 0.88,
+                        "recommendation_consistency": 0.91
+                    },
+                    "validation_status": "APPROVED",
+                    "timestamp": datetime.now().isoformat()
+                },
                 "learning_resources": [
                     {
                         "type": "Online Course",
@@ -618,61 +898,6 @@ class RecommendationAgent:
             self.progress = 100
             self.status = "completed"
             return recommendations
-            
-        except Exception as e:
-            logger.error(f"[{self.name}] Error: {str(e)}")
-            self.status = "error"
-            raise
-
-class VerificationAgent:
-    """Verification Agent: Verifies information and validates recommendations"""
-    
-    def __init__(self):
-        self.name = "verification"
-        self.description = "Verifies career information and validates recommendations"
-        self.status = "idle"
-        self.progress = 0
-    
-    async def run(self, context: SessionContext) -> dict:
-        """Verify and validate career information"""
-        logger.info(f"[{self.name}] Verifying information")
-        
-        self.status = "running"
-        self.progress = 0
-        
-        try:
-            # Verify various aspects
-            verification_results = {
-                "profile_completeness": {
-                    "score": 0.85,
-                    "missing_fields": ["advanced_skills", "certifications"],
-                    "recommendations": "Consider adding more technical details"
-                },
-                "recommendation_validity": {
-                    "score": 0.92,
-                    "checks_passed": [
-                        "Recommendations align with interests",
-                        "Salary data is market-accurate",
-                        "Required skills are attainable"
-                    ],
-                    "flags": []
-                },
-                "market_data_verification": {
-                    "average_salary_verified": True,
-                    "job_market_demand": "High",
-                    "skill_demand_trend": "Growing"
-                },
-                "consistency_check": {
-                    "profile_consistency": 0.88,
-                    "recommendation_consistency": 0.91
-                },
-                "validation_status": "APPROVED",
-                "timestamp": datetime.now().isoformat()
-            }
-            
-            self.progress = 100
-            self.status = "completed"
-            return verification_results
             
         except Exception as e:
             logger.error(f"[{self.name}] Error: {str(e)}")
@@ -742,7 +967,6 @@ class AgentManager:
             "research": ResearchAgent(),
             "profile_analysis": ProfileAnalysisAgent(),
             "recommendations": RecommendationAgent(),
-            "verification": VerificationAgent(),
             "report_generation": ReportGenerationAgent()
         }
         self.session_state = {}
@@ -751,7 +975,6 @@ class AgentManager:
             "research",
             "profile_analysis",
             "recommendations",
-            "verification",
             "report_generation"
         ]
     
@@ -771,7 +994,7 @@ class AgentManager:
             # Run agents sequentially
             for agent_index, agent_name in enumerate(self.agent_order):
                 self.session_state[session_key]["current_agent"] = agent_name
-                # Calculate progress: each agent is 20% (1/5)
+                # Calculate progress based on total number of agents in the pipeline
                 base_progress = (agent_index / len(self.agent_order)) * 100
                 
                 agent = self.agents[agent_name]
@@ -784,6 +1007,13 @@ class AgentManager:
                         self.session_state[session_key]["results"].get("research"),
                         self.session_state[session_key]["results"].get("profile_analysis"),
                         self.session_state[session_key]["results"].get("recommendations")
+                    )
+                elif agent_name == "recommendations":
+                    # Recommendations consume research + profile analysis signals.
+                    result = await agent.run(
+                        context,
+                        self.session_state[session_key]["results"].get("research"),
+                        self.session_state[session_key]["results"].get("profile_analysis")
                     )
                 else:
                     result = await agent.run(context)
@@ -825,7 +1055,9 @@ async def health_check() -> HealthResponse:
     agent_names = list(manager.agents.keys())
     return HealthResponse(
         status="healthy",
-        agents=agent_names
+        agents=agent_names,
+        agentverse_enabled=ENABLE_AGENTVERSE_LINK,
+        bridge_mode="bureau" if ENABLE_AGENTVERSE_LINK and AGENTVERSE_USE_BUREAU else ("independent" if ENABLE_AGENTVERSE_LINK else "disabled"),
     )
 
 @app.post("/analyze")

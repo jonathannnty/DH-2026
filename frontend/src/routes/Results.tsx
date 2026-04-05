@@ -165,6 +165,7 @@ export default function Results() {
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState("Starting analysis…");
   const [isFallback, setIsFallback] = useState(false);
+  const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
 
   const track = useTrack(session?.trackId);
   const shouldStream = session?.status === "analyzing";
@@ -220,23 +221,80 @@ export default function Results() {
     }
   }, [stream.latestEvent, sessionId]);
 
-  // SSE closed without delivering recs (connection dropped) — re-fetch session once
+  // SSE closed/error while still analyzing can miss the terminal event in some
+  // browser/network conditions. Poll session state briefly until complete.
   useEffect(() => {
+    if (!sessionId || recs || fetchError) return;
+    if (session?.status !== "analyzing") return;
     if (stream.status !== "closed" && stream.status !== "error") return;
-    if (recs || fetchError || !sessionId) return;
-    getSession(sessionId)
-      .then((s) => {
+
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 20;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const stop = () => {
+      if (timer) clearInterval(timer);
+      timer = null;
+    };
+
+    const poll = async () => {
+      if (cancelled) return;
+
+      attempts += 1;
+
+      try {
+        const s = await getSession(sessionId);
+        if (cancelled) return;
+
         setSession(s);
+
         if (s.status === "complete") {
+          stop();
           getRecommendations(sessionId)
-            .then(setRecs)
-            .catch(() => setRecs([]));
+            .then((r) => {
+              if (!cancelled) setRecs(r);
+            })
+            .catch(() => {
+              if (!cancelled) setRecs([]);
+            });
+          return;
         }
-      })
-      .catch(() =>
-        setFetchError("Lost connection to analysis stream. Please reload."),
-      );
-  }, [stream.status, recs, fetchError, sessionId]);
+
+        if (s.status === "error") {
+          stop();
+          setFetchError(
+            "Analysis encountered an error. You can retry from the dashboard.",
+          );
+          return;
+        }
+
+        if (attempts >= maxAttempts) {
+          stop();
+          setFetchError(
+            "Lost connection to analysis stream. Please reload.",
+          );
+        }
+      } catch {
+        if (attempts >= maxAttempts) {
+          stop();
+          setFetchError(
+            "Lost connection to analysis stream. Please reload.",
+          );
+        }
+      }
+    };
+
+    void poll();
+    timer = setInterval(() => {
+      void poll();
+    }, 1500);
+
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [stream.status, recs, fetchError, sessionId, session?.status]);
 
   // If session is already complete on load
   useEffect(() => {
@@ -423,7 +481,7 @@ export default function Results() {
     );
   }
 
-  const resolvedRecs = recs ?? [];
+  const resolvedRecs = (recs ?? []).slice(0, 3);
 
   // ── Full results ──
   return (
@@ -443,7 +501,17 @@ export default function Results() {
         </h1>
         <p style={{ color: "var(--pf-color-text-muted)", maxWidth: 540 }}>
           Each match is scored across 12 profile dimensions. The top result is
-          your strongest fit based on skills, values, and goals.
+          your strongest fit based on skills, values, goals, and market research.
+        </p>
+        <p
+          style={{
+            color: "var(--pf-color-text-muted)",
+            maxWidth: 540,
+            fontSize: "0.88rem",
+            marginTop: 8,
+          }}
+        >
+          Pick one option below to focus your next steps.
         </p>
       </div>
 
@@ -610,6 +678,30 @@ export default function Results() {
                 </li>
               ))}
             </ol>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <button
+              onClick={() => setSelectedOptionIndex(i)}
+              style={{
+                padding: "10px 16px",
+                background:
+                  selectedOptionIndex === i
+                    ? "var(--pf-btn-primary-bg)"
+                    : "var(--pf-btn-secondary-bg)",
+                color:
+                  selectedOptionIndex === i
+                    ? "var(--pf-btn-primary-text)"
+                    : "var(--pf-btn-secondary-text)",
+                border: "1px solid var(--pf-btn-secondary-border)",
+                borderRadius: "var(--pf-radius-md)",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontSize: "0.85rem",
+              }}
+            >
+              {selectedOptionIndex === i ? "Selected" : "Choose this option"}
+            </button>
           </div>
         </motion.div>
       ))}

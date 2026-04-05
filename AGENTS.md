@@ -1,8 +1,8 @@
 # Multi-Agent Career Guidance System
 
-This system uses **5 specialized agents** with uAgents (fetch.ai) and browser-use to provide comprehensive career guidance. Each agent handles a specific phase of the analysis pipeline.
+This system uses **4 specialized agents** with uAgents (fetch.ai) and browser-use to provide comprehensive career guidance. Each agent handles a specific phase of the analysis pipeline.
 
-## The 5 Agents
+## The 4 Agents
 
 ### 1. **Research Agent**
 - **Purpose**: Researches job market trends, companies, and career opportunities
@@ -32,10 +32,6 @@ This system uses **5 specialized agents** with uAgents (fetch.ai) and browser-us
   - Learning resource curation
   - Timeline development
   - Alignment scoring
-
-### 4. **Verification Agent**
-- **Purpose**: Verifies information and validates recommendations
-- **Capabilities**:
   - Profile completeness checking
   - Recommendation validity assessment
   - Market data verification
@@ -43,7 +39,7 @@ This system uses **5 specialized agents** with uAgents (fetch.ai) and browser-us
   - Quality assurance checks
   - Flag generation for anomalies
 
-### 5. **Report Generation Agent**
+### 4. **Report Generation Agent**
 - **Purpose**: Creates comprehensive, formatted career guidance reports
 - **Capabilities**:
   - Multi-section report generation
@@ -74,12 +70,12 @@ This system uses **5 specialized agents** with uAgents (fetch.ai) and browser-us
 │  │Res. │→│Profile │→│Recommend │           │
 │  │     │ │Analysis│ │         │           │
 │  └─────┘ └────────┘ └──────────┘           │
-│       ↓                  ↓                   │
-│  ┌──────────┐      ┌──────────┐            │
-│  │    4     │      │    5     │            │
-│  │Verif.   │→     │Report Gen│            │
-│  │         │      │         │            │
-│  └──────────┘      └──────────┘            │
+│             ↓                                │
+│        ┌──────────┐                         │
+│        │    4     │                         │
+│        │Report Gen│                         │
+│        │         │                          │
+│        └──────────┘                         │
 │                                              │
 │  + browser-use for web automation          │
 │  + uagents for agent orchestration         │
@@ -135,7 +131,6 @@ Optional: override deterministic seeds per role (otherwise they are derived from
 export AGENTVERSE_SEED_RESEARCH=...
 export AGENTVERSE_SEED_PROFILE_ANALYSIS=...
 export AGENTVERSE_SEED_RECOMMENDATIONS=...
-export AGENTVERSE_SEED_VERIFICATION=...
 export AGENTVERSE_SEED_REPORT_GENERATION=...
 ```
 
@@ -144,9 +139,9 @@ export AGENTVERSE_SEED_REPORT_GENERATION=...
 python agent_service.py
 ```
 
-The service will start on `http://localhost:8000` and automatically initialize all 5 agents.
+The service will start on `http://localhost:8000` and automatically initialize all 4 agents.
 
-When `ENABLE_AGENTVERSE_LINK=true`, the same process also starts 5 local uAgents (one per role) and links them to Agentverse via mailbox mode.
+When `ENABLE_AGENTVERSE_LINK=true`, the same process also starts 4 local uAgents (one per role) and links them to Agentverse via mailbox mode.
 
 ### 4.1 Connect each local agent in Agentverse Inspector
 
@@ -204,7 +199,7 @@ Response: { "status": "completed", "progress": 100, "results": {...} }
 **List Agents**
 ```http
 GET /agents
-Response: { "total_agents": 5, "agents": [...] }
+Response: { "total_agents": 4, "agents": [...] }
 ```
 
 ### Backend API Endpoints (Using Agents)
@@ -222,7 +217,7 @@ Body: { "content": "..." }
 Response: { "id": "...", "sessionId": "...", "messages": [...] }
 ```
 
-**Start Analysis (Triggers All 5 Agents)**
+**Start Analysis (Triggers All 4 Agents)**
 ```http
 POST /sessions/{sessionId}/analyze
 Response: { "status": "intake→analysis", "message": "Analysis started" }
@@ -242,7 +237,7 @@ Response: { "recommendations": [...], "profile": {...}, "report": {...} }
 2. **Profile Creation** (Backend)
    - Session stores user responses
 
-3. **Agent Pipeline** (All 5 Agents)
+3. **Agent Pipeline** (All 4 Agents)
    ```
    Research Agent
    ├─ Analyzes job market, salaries, companies
@@ -254,11 +249,8 @@ Response: { "recommendations": [...], "profile": {...}, "report": {...} }
    
    Recommendations Agent
    ├─ Generates career paths
+  ├─ Validates recommendation consistency
    └─ Returns recommendations
-   
-   Verification Agent
-   ├─ Validates all data
-   └─ Returns verification report
    
    Report Generation Agent
    ├─ Combines all results
@@ -323,7 +315,7 @@ curl http://localhost:8000/status/{sessionId}
 
 ## Performance Notes
 
-- **Sequential Execution**: Agents run in sequence for now (Research → Analysis → Rec. → Verification → Report)
+- **Sequential Execution**: Agents run in sequence for now (Research → Analysis → Rec.+Validation → Report)
 - **Future Enhancement**: Parallel execution with uAgent messaging protocol
 - **Caching**: Results are cached in-memory (production should use Redis)
 - **Timeout**: Requests timeout after 10 seconds

@@ -198,7 +198,7 @@ describe('Level 3: End-to-End Frontend Testing', () => {
       // Look for status text that might show which agent is running
       // e.g., "Running: Research Phase" or similar
       const agent = screen.queryByText(
-        /research|profile|recommendation|verification|report/i
+        /research|profile|recommendation|report/i
       );
       expect(agent).not.toBeNull();
     });
@@ -348,12 +348,11 @@ describe('Level 3: End-to-End Frontend Testing', () => {
     it('final results incorporate all agent outputs', async () => {
       renderWithQueryClient(<Results />);
 
-      // Verify results show data that comes from all 5 agents:
+      // Verify results show data that comes from all 4 agents:
       // 1. Research: market data, trends
       // 2. Profile: strength/weakness analysis
-      // 3. Recommendations: career paths
-      // 4. Verification: validation results
-      // 5. Report: synthesized report
+      // 3. Recommendations: career paths + validation results
+      // 4. Report: synthesized report
 
       const hasMarketData =
         screen.queryByText(/market|salary|trend|company/i) ||

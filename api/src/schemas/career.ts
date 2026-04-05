@@ -122,7 +122,8 @@ export type StreamEvent = z.infer<typeof StreamEventSchema>;
 export const HealthResponseSchema = z.object({
   status: z.enum(['ok', 'degraded']),
   db: z.enum(['ok', 'error']),
-  agentService: z.enum(['ok', 'unreachable']).optional(),
+  agentService: z.enum(['ok', 'unreachable', 'agentverse-disabled']).optional(),
+  agentServiceMode: z.enum(['disabled', 'independent', 'bureau']).optional(),
   uptime: z.number(),
 });
 

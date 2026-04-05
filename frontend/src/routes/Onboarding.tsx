@@ -128,6 +128,7 @@ export default function Onboarding() {
   const [intakeComplete, setIntakeComplete] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [agentverseNotice, setAgentverseNotice] = useState<string | null>(null);
   const [trackId, setTrackId] = useState<string | null>(null);
   const [sessionStatus, setSessionStatus] = useState<
     "intake" | "analyzing" | "complete" | "error" | null
@@ -268,11 +269,26 @@ export default function Onboarding() {
 
     setAnalyzing(true);
     setAnalyzeError(null);
+    setAgentverseNotice(null);
     try {
       await triggerAnalysis(sessionId);
       nav(`/results/${sessionId}`);
     } catch (err) {
       setAnalyzing(false);
+
+      if (err instanceof ApiError && err.status === 503) {
+        try {
+          const parsed = JSON.parse(err.message) as { message?: string };
+          if (parsed.message?.includes("Agentverse-backed analysis is not ready")) {
+            setAgentverseNotice(parsed.message);
+            setAnalyzeError("Agentverse pipeline is not ready.");
+            return;
+          }
+        } catch {
+          // Ignore parse failures and fall through to generic error handling.
+        }
+      }
+
       setAnalyzeError(
         err instanceof ApiError && err.status === 503
           ? "Analysis service unavailable. Try again in a moment."
@@ -566,6 +582,38 @@ export default function Onboarding() {
           }}
         >
           {onboardingState.sendError}
+        </div>
+      )}
+
+      {agentverseNotice && (
+        <div
+          style={{
+            padding: "10px 14px",
+            background: "rgba(245, 158, 11, 0.12)",
+            border: "1px solid rgba(245, 158, 11, 0.45)",
+            borderRadius: "var(--pf-radius-sm)",
+            color: "var(--pf-color-text-primary)",
+            fontSize: "0.84rem",
+            marginBottom: 10,
+            lineHeight: 1.5,
+          }}
+        >
+          <div
+            style={{
+              fontSize: "0.76rem",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+              color: "var(--pf-color-warning-500)",
+              marginBottom: 6,
+            }}
+          >
+            Agentverse Setup Required
+          </div>
+          <div>{agentverseNotice}</div>
+          <div style={{ marginTop: 6, color: "var(--pf-color-text-muted)" }}>
+            Set ENABLE_AGENTVERSE_LINK=true before running the Python agent service.
+          </div>
         </div>
       )}
 

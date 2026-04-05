@@ -12,7 +12,7 @@ import {
   CreateSessionRequestSchema,
   canTransition,
 } from '../schemas/career.js';
-import { startAnalysis, getStatus, isAgentReachable } from '../services/agent.js';
+import { startAnalysis, getStatus, isAgentversePipelineReady } from '../services/agent.js';
 import { processIntakeMessage, getGreeting } from '../services/intake.js';
 import { getRecommendationsForTrack } from '../services/demo.js';
 import { generatePersonalizedFallback } from '../services/personalizedFallback.js';
@@ -418,13 +418,17 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         .set({ status: 'analyzing', updatedAt: ts })
         .where(eq(sessions.id, req.params.id));
 
-      const agentUp = await isAgentReachable();
-      if (agentUp) {
+      const agentReady = await isAgentversePipelineReady();
+      if (agentReady) {
         startAnalysis(req.params.id, profile, row.trackId).catch((err) => {
           app.log.warn(err, 'startAnalysis call failed — SSE timeout will trigger fallback');
         });
       } else {
-        app.log.warn({ sessionId: req.params.id }, 'Agent unreachable at analyze time — SSE timeout will trigger personalized fallback');
+        app.log.warn({ sessionId: req.params.id }, 'Agentverse-backed 4-agent pipeline is not ready');
+        return reply.status(503).send({
+          ok: false as const,
+          message: 'Agentverse-backed analysis is not ready. Start the Python agent service with ENABLE_AGENTVERSE_LINK=true so the four-agent pipeline can generate the top 3 job matches.',
+        });
       }
 
       return reply.send({ ok: true as const });

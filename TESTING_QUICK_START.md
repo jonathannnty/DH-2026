@@ -24,8 +24,8 @@ npm run test:agents
 **Files**: `api/src/__tests__/agent-service-level-1.test.ts`
 
 Tests the agent service in isolation:
-- All 5 agents registered?
-- Do they run in order: research → profile → recommendations → verification → report?
+- All 4 agents registered?
+- Do they run in order: research → profile → recommendations (with validation) → report?
 - Does progress go from 0% → 100%?
 - Does each agent produce output?
 
@@ -129,7 +129,7 @@ lsof -i :8000
 
 | Level | Expected Time | What Passes? |
 |-------|---------------|--------------|
-| Level 1 | 5-15s | All 5 agents run sequentially |
+| Level 1 | 5-15s | All 4 agents run sequentially |
 | Level 2 | 10-20s | Backend properly orchestrates |
 | Level 3 | 30-60s | Full UI flow works |
 

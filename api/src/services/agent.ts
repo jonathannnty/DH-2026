@@ -28,6 +28,13 @@ export interface AgentStatus {
   error?: string;
 }
 
+export interface AgentServiceHealth {
+  status?: string;
+  agents?: string[];
+  agentverse_enabled?: boolean;
+  bridge_mode?: 'disabled' | 'independent' | 'bureau' | string;
+}
+
 interface FiveAgentPath {
   title?: string;
   alignment_score?: number;
@@ -54,6 +61,10 @@ interface FiveAgentStatusResponse {
   stage?: string;
   error?: string;
   results?: AgentPipelineResults;
+}
+
+async function fetchAgentServiceHealth(): Promise<AgentServiceHealth> {
+  return request<AgentServiceHealth>('/health');
 }
 
 function clampFitScore(score: number): number {
@@ -191,5 +202,30 @@ export async function isAgentReachable(): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+export async function isAgentversePipelineReady(): Promise<boolean> {
+  try {
+    const health = await fetchAgentServiceHealth();
+    return Boolean(
+      health.status === 'healthy' &&
+      health.agentverse_enabled &&
+      Array.isArray(health.agents) &&
+      health.agents.length === 4,
+    );
+  } catch {
+    return false;
+  }
+}
+
+export async function getAgentServiceMode(): Promise<'disabled' | 'independent' | 'bureau' | 'unknown'> {
+  try {
+    const health = await fetchAgentServiceHealth();
+    return health.bridge_mode === 'bureau' || health.bridge_mode === 'independent'
+      ? health.bridge_mode
+      : 'disabled';
+  } catch {
+    return 'unknown';
   }
 }
