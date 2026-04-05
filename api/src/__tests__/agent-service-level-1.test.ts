@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
  *
  * Tests the agent service in isolation using direct HTTP requests.
  * Verifies:
- * - All 5 agents are registered and healthy
+ * - All 4 agents are registered and healthy
  * - Agents run in correct sequence
  * - Progress updates from 0% → 100%
  * - Each agent's output is properly captured
@@ -38,7 +38,7 @@ async function request<T>(
 
 describe('Level 1: Agent Service Direct Testing', () => {
   describe('Health & Registration', () => {
-    it('health check returns all 5 agents registered', async () => {
+    it('health check returns all 4 agents registered', async () => {
       const { status, data } = await request<{ status: string; agents: string[] }>(
         'GET',
         '/health'
@@ -49,9 +49,8 @@ describe('Level 1: Agent Service Direct Testing', () => {
       expect(data.agents).toContain('research');
       expect(data.agents).toContain('profile_analysis');
       expect(data.agents).toContain('recommendations');
-      expect(data.agents).toContain('verification');
       expect(data.agents).toContain('report_generation');
-      expect(data.agents).toHaveLength(5);
+      expect(data.agents).toHaveLength(4);
     });
 
     it('list agents returns detailed agent information', async () => {
@@ -61,14 +60,13 @@ describe('Level 1: Agent Service Direct Testing', () => {
       }>('GET', '/agents');
 
       expect(status).toBe(200);
-      expect(data.total_agents).toBe(5);
-      expect(data.agents).toHaveLength(5);
+      expect(data.total_agents).toBe(4);
+      expect(data.agents).toHaveLength(4);
 
       const agentNames = data.agents.map((a) => a.name);
       expect(agentNames).toContain('research');
       expect(agentNames).toContain('profile_analysis');
       expect(agentNames).toContain('recommendations');
-      expect(agentNames).toContain('verification');
       expect(agentNames).toContain('report_generation');
 
       // Verify each agent has metadata
@@ -114,7 +112,7 @@ describe('Level 1: Agent Service Direct Testing', () => {
       expect(['Analysis started', 'in_progress', 'completed']).toContain(data.status);
     });
 
-    it('agents execute sequentially (research → profile → recommendations → verification → report)', async () => {
+    it('agents execute sequentially (research → profile → recommendations → report)', async () => {
       // Allow time for pipeline to start
       await new Promise((r) => setTimeout(r, 100));
 
@@ -148,12 +146,11 @@ describe('Level 1: Agent Service Direct Testing', () => {
       // Verify at least one agent was executed (may be partial set if service moved fast)
       expect(statuses.length).toBeGreaterThan(0);
       // If we got all agents, verify order
-      if (statuses.length >= 5) {
+      if (statuses.length >= 4) {
         expect(statuses).toEqual([
           'research',
           'profile_analysis',
           'recommendations',
-          'verification',
           'report_generation',
         ]);
       }
@@ -196,11 +193,11 @@ describe('Level 1: Agent Service Direct Testing', () => {
       const recommendations = results.recommendations as Record<string, unknown>;
       expect(recommendations.top_career_paths).toBeTruthy();
       expect(recommendations.next_steps).toBeTruthy();
+      expect(recommendations.validation).toBeTruthy();
 
-      // Verify verification output
-      expect(results.verification).toBeTruthy();
-      const verification = results.verification as Record<string, unknown>;
-      expect(verification.validation_status).toBeTruthy();
+      // Validation checks are now embedded in recommendations output
+      const validation = recommendations.validation as Record<string, unknown>;
+      expect(validation.validation_status).toBeTruthy();
 
       // Verify report generation output
       expect(results.report_generation).toBeTruthy();

@@ -36,7 +36,11 @@ interface FiveAgentPath {
   growth_potential?: string;
 }
 
-interface FiveAgentResults {
+interface AgentPipelineResults {
+  research?: {
+    top_companies?: string[];
+    trending_fields?: string[];
+  };
   recommendations?: {
     top_career_paths?: FiveAgentPath[];
     next_steps?: string[];
@@ -49,7 +53,7 @@ interface FiveAgentStatusResponse {
   current_agent?: string;
   stage?: string;
   error?: string;
-  results?: FiveAgentResults;
+  results?: AgentPipelineResults;
 }
 
 function clampFitScore(score: number): number {
@@ -73,11 +77,15 @@ function parseSalaryRange(input?: string): { low: number; high: number; currency
 function toCareerRecommendation(
   path: FiveAgentPath,
   nextSteps: string[],
+  context?: {
+    topCompanies?: string[];
+    trendingFields?: string[];
+  },
 ): CareerRecommendation {
   const fitScore = clampFitScore((path.alignment_score ?? 0.75) * 100);
   const summary = path.reasoning
     ? `Based on your profile and market signal analysis: ${path.reasoning}`
-    : 'Recommended from the 5-agent pipeline based on profile fit and job market demand.';
+    : 'Recommended from the 4-agent pipeline based on profile fit and job market demand.';
 
   const reasons = [
     path.reasoning ?? 'High profile-fit score from the recommendation agent.',
@@ -86,18 +94,28 @@ function toCareerRecommendation(
       : 'Strong near-term market demand for this role.',
   ];
 
+  if (context?.trendingFields?.length) {
+    reasons.push(`Aligned with current market trends: ${context.trendingFields.slice(0, 2).join(', ')}`);
+  }
+
+  const mergedSteps = nextSteps.length
+    ? nextSteps.slice(0, 3)
+    : [
+      'Build one targeted project for this role and publish it in your portfolio.',
+      'Apply to 10 roles and tailor your resume to role-specific keywords.',
+    ];
+
+  if (context?.topCompanies?.length) {
+    mergedSteps.push(`Prioritize applications to: ${context.topCompanies.slice(0, 3).join(', ')}`);
+  }
+
   return {
     title: path.title ?? 'Career Opportunity',
     summary,
     fitScore,
     reasons,
     concerns: ['Validate role fit with informational interviews and current job requirements.'],
-    nextSteps: nextSteps.length
-      ? nextSteps.slice(0, 3)
-      : [
-        'Build one targeted project for this role and publish it in your portfolio.',
-        'Apply to 10 roles and tailor your resume to role-specific keywords.',
-      ],
+    nextSteps: mergedSteps,
     salaryRange: parseSalaryRange(path.avg_salary),
   };
 }
@@ -121,9 +139,16 @@ function normalizeStatus(rawStatus?: string): AgentStatus['status'] {
 
 function normalizeFiveAgentStatus(raw: FiveAgentStatusResponse): AgentStatus {
   const status = normalizeStatus(raw.status);
-  const recommendations = raw.results?.recommendations?.top_career_paths
-    ?.slice(0, 3)
-    .map((path) => toCareerRecommendation(path, raw.results?.recommendations?.next_steps ?? []));
+  const rankedPaths = [...(raw.results?.recommendations?.top_career_paths ?? [])]
+    .sort((a, b) => (b.alignment_score ?? 0) - (a.alignment_score ?? 0))
+    .slice(0, 3);
+
+  const recommendations = rankedPaths.map((path) =>
+    toCareerRecommendation(path, raw.results?.recommendations?.next_steps ?? [], {
+      topCompanies: raw.results?.research?.top_companies,
+      trendingFields: raw.results?.research?.trending_fields,
+    }),
+  );
 
   return {
     status,
