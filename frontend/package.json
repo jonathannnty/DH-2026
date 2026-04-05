@@ -10,13 +10,15 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "lint:tokens": "node scripts/check-token-literals.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-query-devtools": "^5.62.0",
     "drizzle-kit": "0.31.10",
     "framer-motion": "^12.38.0",
+    "lucide-react": "^1.7.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.0",

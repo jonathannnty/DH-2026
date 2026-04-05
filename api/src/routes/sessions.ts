@@ -419,25 +419,27 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
           ];
 
         const delays = [500, 800, 600, 400];
-        const steps = [
-          ...stageLabels.map(([progress, stage], i) => ({
-            delay: delays[i],
-            event: { type: 'progress', payload: { status: 'analyzing', progress, stage } },
-          })),
-          { delay: 300, event: { type: 'complete', payload: { status: 'complete', progress: 100 } } },
-        ];
+        // Note: 'complete' event is NOT in this array — it is emitted only after
+        // the DB write succeeds, preventing the race where the browser calls
+        // getRecommendations() before the row is persisted.
+        const progressSteps = stageLabels.map(([progress, stage], i) => ({
+          delay: delays[i],
+          progress,
+          stage: stage as string,
+        }));
 
         let cancelled = false;
         req.raw.on('close', () => { cancelled = true; });
 
-        for (const step of steps) {
+        for (const step of progressSteps) {
           if (cancelled) break;
           await new Promise((r) => setTimeout(r, step.delay));
           if (cancelled) break;
-          send(step.event);
+          send({ type: 'progress', payload: { status: 'analyzing', progress: step.progress, stage: step.stage } });
         }
 
         if (!cancelled) {
+          // 1. Persist recommendations FIRST
           const recs = getRecommendationsForTrack(trackId);
           await db
             .update(sessions)
@@ -447,6 +449,12 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
               updatedAt: now(),
             })
             .where(eq(sessions.id, req.params.id));
+
+          // 2. Only then signal the browser — DB is guaranteed ready
+          await new Promise((r) => setTimeout(r, 300));
+          if (!cancelled) {
+            send({ type: 'complete', payload: { status: 'complete', progress: 100 } });
+          }
         }
 
         reply.raw.end();
@@ -522,16 +530,27 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
             clearTimeout(timeoutHandle);
 
             let recs: CareerRecommendation[];
+            let usedFallback = false;
 
-            if (agentStatus.recommendations?.length) {
-              // Apply track enrichment to live agent recs
+            const agentRecs = agentStatus.recommendations ?? [];
+            const passesContract = meetsPersonalizationContract(agentRecs, profile, trackId);
+
+            if (agentRecs.length && passesContract) {
+              // Live recs pass personalization contract — apply track enrichment
               const adapter = getAdapter(trackId ?? 'general');
-              recs = await adapter.enrich(profile, agentStatus.recommendations);
+              recs = await adapter.enrich(profile, agentRecs);
             } else {
-              // Agent completed but returned no recs — use personalized fallback
+              // Agent returned no recs, or recs failed personalization contract — use fallback
+              if (agentRecs.length && !passesContract) {
+                app.log.warn(
+                  { sessionId: req.params.id, recCount: agentRecs.length },
+                  'Live recs failed personalization contract — substituting personalized fallback',
+                );
+              }
               const rawRecs = generatePersonalizedFallback(profile, trackId);
               const adapter = getAdapter(trackId ?? 'general');
               recs = await adapter.enrich(profile, rawRecs);
+              usedFallback = true;
             }
 
             await db
@@ -539,7 +558,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
               .set({ status: 'complete', recommendations: JSON.stringify(recs), updatedAt: now() })
               .where(eq(sessions.id, req.params.id));
 
-            send({ type: 'complete', payload: { status: 'complete', progress: 100 } });
+            send({ type: 'complete', payload: { status: 'complete', progress: 100, isFallback: usedFallback } });
             reply.raw.end();
           } else if (agentStatus.status === 'error') {
             await invokeFallback(`agent reported error: ${agentStatus.error ?? 'unknown'}`);

@@ -1,9 +1,21 @@
-import { useParams, Link, useNavigate } from "react-router-dom";
+import {
+  useParams,
+  Link,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import { useState, useEffect } from "react";
-import { downloadSessionReport, getSession, getRecommendations } from "@/lib/api";
+import { getSession, getRecommendations } from "@/lib/api";
 import { useSessionStream } from "@/hooks/useSessionStream";
 import { useTrack } from "@/hooks/useTrack";
 import { motion, useReducedMotion } from "framer-motion";
+import {
+  ArrowRight,
+  CircleDollarSign,
+  Compass,
+  ShieldAlert,
+  Sparkles,
+} from "lucide-react";
 import type {
   CareerRecommendation,
   SessionResponse,
@@ -13,6 +25,8 @@ import {
   canPerformUiAction,
   deriveResultsStateContract,
 } from "@/types/uiStateContract";
+import { IconLabel } from "@/components/ui/IconLabel";
+import { UI_COPY } from "@/lib/copy";
 
 // ─── Styles ───────────────────────────────────────────────────────
 
@@ -72,30 +86,6 @@ const pill: React.CSSProperties = {
   color: "var(--pf-color-text-muted)",
 };
 
-const reportActions: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  alignItems: "center",
-  gap: 12,
-  marginTop: 18,
-};
-
-const reportButton: React.CSSProperties = {
-  padding: "10px 18px",
-  background: "var(--pf-btn-secondary-bg)",
-  color: "var(--pf-btn-secondary-text)",
-  border: "1px solid var(--pf-btn-secondary-border)",
-  borderRadius: "var(--pf-radius-md)",
-  fontWeight: 600,
-  fontSize: "0.9rem",
-  cursor: "pointer",
-};
-
-const reportNote: React.CSSProperties = {
-  color: "var(--pf-color-text-muted)",
-  fontSize: "0.82rem",
-};
-
 // ─── Sub-components ───────────────────────────────────────────────
 
 function ScoreBadge({ score }: { score: number }) {
@@ -120,8 +110,10 @@ function FallbackBanner() {
         alignItems: "center",
         gap: 10,
         padding: "10px 16px",
-        background: "rgba(245, 158, 11, 0.08)",
-        border: "1px solid rgba(245, 158, 11, 0.3)",
+        background:
+          "color-mix(in srgb, var(--pf-color-warning-500) 8%, transparent)",
+        border:
+          "1px solid color-mix(in srgb, var(--pf-color-warning-500) 30%, transparent)",
         borderRadius: "var(--pf-radius-md)",
         marginBottom: 16,
         fontSize: "0.82rem",
@@ -135,11 +127,10 @@ function FallbackBanner() {
           letterSpacing: "0.05em",
         }}
       >
-        Personalised Fallback Mode
+        {UI_COPY.fallback.modeBadge}
       </span>
       <span style={{ color: "var(--pf-color-text-muted)", fontWeight: 400 }}>
-        — Live analysis timed out. These recommendations are derived from your
-        profile using our offline engine.
+        — {UI_COPY.fallback.modeDescription}
       </span>
     </div>
   );
@@ -181,6 +172,7 @@ function TrackBanner({ track }: { track: SponsorTrack }) {
 export default function Results() {
   const reduceMotion = useReducedMotion();
   const { sessionId } = useParams<{ sessionId: string }>();
+  const [searchParams] = useSearchParams();
   const nav = useNavigate();
 
   const [session, setSession] = useState<SessionResponse | null>(null);
@@ -212,30 +204,6 @@ export default function Results() {
     results: resultsState,
   });
 
-  async function handleDownloadReport() {
-    if (!sessionId || isDownloadingReport) return;
-
-    setIsDownloadingReport(true);
-    setDownloadError(null);
-
-    try {
-      const { blob, filename } = await downloadSessionReport(sessionId);
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = filename;
-      anchor.rel = "noreferrer";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
-    } catch {
-      setDownloadError("Unable to prepare the report download right now.");
-    } finally {
-      setIsDownloadingReport(false);
-    }
-  }
-
   // Load session
   useEffect(() => {
     if (!sessionId) return;
@@ -256,12 +224,22 @@ export default function Results() {
 
     if (type === "complete" && sessionId) {
       if ((payload as { isFallback?: boolean }).isFallback) setIsFallback(true);
-      getRecommendations(sessionId)
-        .then(setRecs)
-        .catch(() => setRecs([]));
+
+      // Fetch session first so status is updated before recommendations are fetched.
+      // Then retry recommendations once with a 1.5s delay if the first attempt fails —
+      // guards against any residual timing skew between the SSE emit and DB visibility.
       getSession(sessionId)
         .then(setSession)
         .catch(() => {});
+
+      getRecommendations(sessionId)
+        .then(setRecs)
+        .catch(() =>
+          new Promise<void>((res) => setTimeout(res, 1500))
+            .then(() => getRecommendations(sessionId))
+            .then(setRecs)
+            .catch(() => setRecs([])),
+        );
     }
 
     if (type === "error") {
@@ -274,77 +252,21 @@ export default function Results() {
   // SSE closed/error while still analyzing can miss the terminal event in some
   // browser/network conditions. Poll session state briefly until complete.
   useEffect(() => {
-    if (!sessionId || recs || fetchError) return;
-    if (session?.status !== "analyzing") return;
     if (stream.status !== "closed" && stream.status !== "error") return;
-
-    let cancelled = false;
-    let attempts = 0;
-    const maxAttempts = 20;
-    let timer: ReturnType<typeof setInterval> | null = null;
-
-    const stop = () => {
-      if (timer) clearInterval(timer);
-      timer = null;
-    };
-
-    const poll = async () => {
-      if (cancelled) return;
-
-      attempts += 1;
-
-      try {
-        const s = await getSession(sessionId);
-        if (cancelled) return;
-
+    if (recs || fetchError || !sessionId) return;
+    getSession(sessionId)
+      .then((s) => {
         setSession(s);
-
         if (s.status === "complete") {
-          stop();
           getRecommendations(sessionId)
-            .then((r) => {
-              if (!cancelled) setRecs(r);
-            })
-            .catch(() => {
-              if (!cancelled) setRecs([]);
-            });
-          return;
+            .then(setRecs)
+            .catch(() => setRecs([]));
         }
-
-        if (s.status === "error") {
-          stop();
-          setFetchError(
-            "Analysis encountered an error. You can retry from the dashboard.",
-          );
-          return;
-        }
-
-        if (attempts >= maxAttempts) {
-          stop();
-          setFetchError(
-            "Lost connection to analysis stream. Please reload.",
-          );
-        }
-      } catch {
-        if (attempts >= maxAttempts) {
-          stop();
-          setFetchError(
-            "Lost connection to analysis stream. Please reload.",
-          );
-        }
-      }
-    };
-
-    void poll();
-    timer = setInterval(() => {
-      void poll();
-    }, 1500);
-
-    return () => {
-      cancelled = true;
-      stop();
-    };
-  }, [stream.status, recs, fetchError, sessionId, session?.status]);
+      })
+      .catch(() =>
+        setFetchError("Lost connection to analysis stream. Please reload."),
+      );
+  }, [stream.status, recs, fetchError, sessionId]);
 
   // If session is already complete on load
   useEffect(() => {
@@ -358,7 +280,13 @@ export default function Results() {
 
     // Redirect intake sessions back to the chat
     if (session.status === "intake" && sessionId) {
-      nav(`/onboarding?session=${sessionId}`, { replace: true });
+      const finalTrack = session.trackId ?? searchParams.get("track");
+      nav(
+        finalTrack
+          ? `/onboarding?session=${sessionId}&track=${encodeURIComponent(finalTrack)}`
+          : `/onboarding?session=${sessionId}`,
+        { replace: true },
+      );
     }
 
     // Surface analysis errors
@@ -367,7 +295,7 @@ export default function Results() {
         "This session encountered an error during analysis. You can start a new assessment or return to the dashboard.",
       );
     }
-  }, [session, recs, sessionId, nav]);
+  }, [session, recs, sessionId, nav, searchParams]);
 
   // ── No session ID param ──
   if (resultsState.viewState === "no-session") {
@@ -531,7 +459,7 @@ export default function Results() {
     );
   }
 
-  const resolvedRecs = (recs ?? []).slice(0, 3);
+  const resolvedRecs = recs ?? [];
 
   // ── Full results ──
   return (
@@ -549,6 +477,10 @@ export default function Results() {
             ? "Your Top Career Match"
             : `Your Top ${resultsState.recommendationCount} Career Matches`}
         </h1>
+        <p style={{ color: "var(--pf-color-text-muted)", maxWidth: 540 }}>
+          Each match is scored across 12 profile dimensions. The top result is
+          your strongest fit based on skills, values, and goals.
+        </p>
         <p style={{ color: "var(--pf-color-text-muted)", maxWidth: 540 }}>
           Each match is scored across 12 profile dimensions. The top result is
           your strongest fit based on skills, values, goals, and market research.
@@ -667,18 +599,22 @@ export default function Results() {
                 marginBottom: 16,
               }}
             >
-              <span
+              <IconLabel
+                icon={CircleDollarSign}
+                variant="section"
                 style={{ color: "var(--pf-color-text-muted)", fontWeight: 400 }}
               >
                 Salary
-              </span>
+              </IconLabel>
               ${rec.salaryRange.low.toLocaleString()} – $
               {rec.salaryRange.high.toLocaleString()} USD
             </div>
           )}
 
           <div style={{ marginBottom: 14 }}>
-            <div
+            <IconLabel
+              icon={Sparkles}
+              variant="section"
               style={{
                 fontWeight: 600,
                 fontSize: "0.8rem",
@@ -689,7 +625,7 @@ export default function Results() {
               }}
             >
               Why it fits
-            </div>
+            </IconLabel>
             <div style={pillList}>
               {rec.reasons.map((r, j) => (
                 <span key={j} style={pill}>
@@ -701,7 +637,9 @@ export default function Results() {
 
           {rec.concerns.length > 0 && (
             <div style={{ marginBottom: 14 }}>
-              <div
+              <IconLabel
+                icon={ShieldAlert}
+                variant="section"
                 style={{
                   fontWeight: 600,
                   fontSize: "0.8rem",
@@ -712,7 +650,7 @@ export default function Results() {
                 }}
               >
                 Watch out for
-              </div>
+              </IconLabel>
               <div style={pillList}>
                 {rec.concerns.map((c, j) => (
                   <span key={j} style={pill}>
@@ -724,7 +662,9 @@ export default function Results() {
           )}
 
           <div>
-            <div
+            <IconLabel
+              icon={Compass}
+              variant="section"
               style={{
                 fontWeight: 600,
                 fontSize: "0.8rem",
@@ -735,7 +675,7 @@ export default function Results() {
               }}
             >
               Next steps
-            </div>
+            </IconLabel>
             <ol
               style={{
                 paddingLeft: 20,
@@ -749,30 +689,6 @@ export default function Results() {
                 </li>
               ))}
             </ol>
-          </div>
-
-          <div style={{ marginTop: 14 }}>
-            <button
-              onClick={() => setSelectedOptionIndex(i)}
-              style={{
-                padding: "10px 16px",
-                background:
-                  selectedOptionIndex === i
-                    ? "var(--pf-btn-primary-bg)"
-                    : "var(--pf-btn-secondary-bg)",
-                color:
-                  selectedOptionIndex === i
-                    ? "var(--pf-btn-primary-text)"
-                    : "var(--pf-btn-secondary-text)",
-                border: "1px solid var(--pf-btn-secondary-border)",
-                borderRadius: "var(--pf-radius-md)",
-                fontWeight: 600,
-                cursor: "pointer",
-                fontSize: "0.85rem",
-              }}
-            >
-              {selectedOptionIndex === i ? "Selected" : "Choose this option"}
-            </button>
           </div>
         </motion.div>
       ))}
@@ -791,15 +707,20 @@ export default function Results() {
           style={{
             padding: "12px 28px",
             background: "var(--pf-btn-primary-bg)",
-            color: "#fff",
+            color: "var(--pf-btn-primary-text)",
             border: "none",
             borderRadius: "var(--pf-radius-md)",
             fontWeight: 600,
             cursor: "pointer",
             fontSize: "0.9rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
           }}
         >
-          Start new assessment
+          <IconLabel icon={ArrowRight} variant="cta">
+            Start new assessment
+          </IconLabel>
         </button>
         <Link
           to="/dashboard"

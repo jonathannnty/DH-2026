@@ -116,6 +116,7 @@ export default function Onboarding() {
   const [params] = useSearchParams();
   const nav = useNavigate();
   const sessionId = params.get("session");
+  const routeTrack = params.get("track");
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [profile, setProfile] = useState<CareerProfile>({});
@@ -147,7 +148,13 @@ export default function Onboarding() {
 
         // If already beyond intake, redirect to the right page
         if (s.status === "analyzing" || s.status === "complete") {
-          nav(`/results/${sessionId}`, { replace: true });
+          const finalTrack = s.trackId ?? routeTrack;
+          nav(
+            finalTrack
+              ? `/results/${sessionId}?track=${encodeURIComponent(finalTrack)}`
+              : `/results/${sessionId}`,
+            { replace: true },
+          );
           return;
         }
 
@@ -164,7 +171,7 @@ export default function Onboarding() {
 
         setMessages(s.messages);
         setProfile(s.profile);
-        setTrackId(s.trackId);
+        setTrackId(s.trackId ?? routeTrack);
 
         // Detect if session was previously completed through intake
         const lastMsg = s.messages[s.messages.length - 1];
@@ -178,7 +185,7 @@ export default function Onboarding() {
         setLoadState("ready");
       })
       .catch(() => setLoadState("error"));
-  }, [sessionId, nav]);
+  }, [sessionId, nav, routeTrack]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -272,7 +279,12 @@ export default function Onboarding() {
     setAgentverseNotice(null);
     try {
       await triggerAnalysis(sessionId);
-      nav(`/results/${sessionId}`);
+      const finalTrack = trackId ?? routeTrack;
+      nav(
+        finalTrack
+          ? `/results/${sessionId}?track=${encodeURIComponent(finalTrack)}`
+          : `/results/${sessionId}`,
+      );
     } catch (err) {
       setAnalyzing(false);
 
@@ -573,7 +585,8 @@ export default function Onboarding() {
         <div
           style={{
             padding: "8px 14px",
-            background: "rgba(239,68,68,0.1)",
+            background:
+              "color-mix(in srgb, var(--pf-color-danger-500) 10%, transparent)",
             border: "1px solid var(--pf-color-danger-500)",
             borderRadius: "var(--pf-radius-sm)",
             color: "var(--pf-color-danger-500)",
@@ -582,38 +595,6 @@ export default function Onboarding() {
           }}
         >
           {onboardingState.sendError}
-        </div>
-      )}
-
-      {agentverseNotice && (
-        <div
-          style={{
-            padding: "10px 14px",
-            background: "rgba(245, 158, 11, 0.12)",
-            border: "1px solid rgba(245, 158, 11, 0.45)",
-            borderRadius: "var(--pf-radius-sm)",
-            color: "var(--pf-color-text-primary)",
-            fontSize: "0.84rem",
-            marginBottom: 10,
-            lineHeight: 1.5,
-          }}
-        >
-          <div
-            style={{
-              fontSize: "0.76rem",
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-              color: "var(--pf-color-warning-500)",
-              marginBottom: 6,
-            }}
-          >
-            Agentverse Setup Required
-          </div>
-          <div>{agentverseNotice}</div>
-          <div style={{ marginTop: 6, color: "var(--pf-color-text-muted)" }}>
-            Set ENABLE_AGENTVERSE_LINK=true before running the Python agent service.
-          </div>
         </div>
       )}
 
@@ -640,7 +621,7 @@ export default function Onboarding() {
               padding: "14px 40px",
               fontSize: "1.05rem",
               fontWeight: 700,
-              color: "#fff",
+              color: "var(--pf-btn-primary-text)",
               background: canTriggerAnalysis
                 ? "var(--pf-btn-success-bg)"
                 : "var(--pf-btn-secondary-bg)",
