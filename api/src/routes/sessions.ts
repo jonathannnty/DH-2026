@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
+import { Buffer } from 'node:buffer';
 import { eq } from 'drizzle-orm';
+import PDFDocument from 'pdfkit';
 import { db } from '../db/client.js';
 import { sessions } from '../db/schema.js';
 import {
@@ -30,6 +32,148 @@ function parseJson<T>(raw: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function formatList(items: string[]): string {
+  if (!items.length) return 'None provided';
+  return items.map((item) => `- ${item}`).join('\n');
+}
+
+function formatSalaryRange(range?: CareerRecommendation['salaryRange']): string {
+  if (!range) return 'Not provided';
+  return `$${range.low.toLocaleString()} - $${range.high.toLocaleString()} ${range.currency}`;
+}
+
+function buildReportMarkdown(session: {
+  id: string;
+  trackId: string | null;
+  profile: CareerProfile;
+  recommendations: CareerRecommendation[];
+  createdAt: string;
+  updatedAt: string;
+}): string {
+  const topRecommendations = session.recommendations.slice(0, 3);
+  const interests = session.profile.interests ?? [];
+  const values = session.profile.values ?? [];
+  const hardSkills = session.profile.hardSkills ?? [];
+  const softSkills = session.profile.softSkills ?? [];
+  const actionSteps = topRecommendations.flatMap((recommendation) => recommendation.nextSteps).slice(0, 6);
+
+  const recommendationSections = topRecommendations.length
+    ? topRecommendations.map((recommendation, index) => {
+      const reasons = formatList(recommendation.reasons);
+      const concerns = formatList(recommendation.concerns);
+      const steps = formatList(recommendation.nextSteps);
+
+      return [
+        `## ${index + 1}. ${recommendation.title}`,
+        `Fit score: ${recommendation.fitScore}%`,
+        `Summary: ${recommendation.summary}`,
+        `Salary range: ${formatSalaryRange(recommendation.salaryRange)}`,
+        '',
+        'Why it fits:',
+        reasons,
+        '',
+        'Watch-outs:',
+        concerns,
+        '',
+        'Next steps:',
+        steps,
+      ].join('\n');
+    }).join('\n\n')
+    : 'No recommendations were generated for this session.';
+
+  return [
+    '# Career Guidance Report',
+    '',
+    `Session ID: ${session.id}`,
+    `Track: ${session.trackId ?? 'general'}`,
+    `Created: ${session.createdAt}`,
+    `Updated: ${session.updatedAt}`,
+    '',
+    '## Profile Snapshot',
+    '',
+    'Interests:',
+    formatList(interests),
+    '',
+    'Values:',
+    formatList(values),
+    '',
+    'Hard skills:',
+    formatList(hardSkills),
+    '',
+    'Soft skills:',
+    formatList(softSkills),
+    '',
+    '## Top Career Matches',
+    '',
+    recommendationSections,
+    '',
+    '## Action Plan',
+    '',
+    actionSteps.length ? formatList(actionSteps) : 'No next steps were generated.',
+    '',
+    '## Notes',
+    '',
+    'This report was generated from the completed assessment and is suitable for download, sharing, or printing to PDF.',
+  ].join('\n');
+}
+
+function markdownLineToText(line: string): { text: string; bold: boolean; size: number; indent: number } {
+  if (line.startsWith('# ')) {
+    return { text: line.slice(2), bold: true, size: 20, indent: 0 };
+  }
+
+  if (line.startsWith('## ')) {
+    return { text: line.slice(3), bold: true, size: 13, indent: 0 };
+  }
+
+  if (line.startsWith('- ')) {
+    return { text: `• ${line.slice(2)}`, bold: false, size: 10, indent: 10 };
+  }
+
+  return { text: line, bold: false, size: 10, indent: 0 };
+}
+
+function createPdfBufferFromMarkdown(markdown: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 48, autoFirstPage: true });
+    const chunks: Buffer[] = [];
+
+    doc.on('data', (chunk: Buffer | Uint8Array) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    });
+
+    doc.on('end', () => {
+      resolve(Buffer.concat(chunks));
+    });
+
+    doc.on('error', reject);
+
+    doc.info.Title = 'Career Guidance Report';
+    doc.info.Author = 'PathFinder AI';
+    doc.info.Subject = 'Career recommendations and action plan';
+
+    const lines = markdown.split('\n');
+    for (const line of lines) {
+      if (line.trim() === '') {
+        doc.moveDown(0.45);
+        continue;
+      }
+
+      const style = markdownLineToText(line);
+      doc
+        .font(style.bold ? 'Helvetica-Bold' : 'Helvetica')
+        .fontSize(style.size)
+        .text(style.text, { indent: style.indent, lineGap: 2 });
+
+      if (style.size >= 13) {
+        doc.moveDown(0.2);
+      }
+    }
+
+    doc.end();
+  });
 }
 
 export async function sessionRoutes(app: FastifyInstance): Promise<void> {
@@ -102,6 +246,47 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       };
+    },
+  );
+
+  // ── GET /sessions/:id/report ───────────────────────────────────
+  app.get<{ Params: { id: string } }>(
+    '/sessions/:id/report',
+    async (req, reply) => {
+      const row = await db
+        .select()
+        .from(sessions)
+        .where(eq(sessions.id, req.params.id))
+        .get();
+
+      if (!row) return reply.notFound('Session not found');
+
+      if (row.status !== 'complete') {
+        return reply.badRequest(
+          `Report not ready. Current status: '${row.status}'. Must be 'complete'.`,
+        );
+      }
+
+      const markdown = buildReportMarkdown({
+        id: row.id,
+        trackId: row.trackId,
+        profile: parseJson<CareerProfile>(row.profile, {}),
+        recommendations: row.recommendations
+          ? parseJson<CareerRecommendation[]>(row.recommendations, [])
+          : [],
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      });
+
+      const pdfBuffer = await createPdfBufferFromMarkdown(markdown);
+      const filename = `career-report-${row.id.slice(0, 8)}.pdf`;
+
+      reply.header('Content-Type', 'application/pdf');
+      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+      reply.header('Cache-Control', 'no-store');
+      reply.header('Content-Length', String(pdfBuffer.byteLength));
+
+      return reply.send(pdfBuffer);
     },
   );
 

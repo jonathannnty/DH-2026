@@ -86,6 +86,25 @@ export async function getRecommendations(
   return CareerRecommendationSchema.array().parse(data);
 }
 
+export async function downloadSessionReport(
+  sessionId: string,
+): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(`${BASE_URL}/sessions/${sessionId}/report`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new ApiError(res.status, body);
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get('content-disposition') ?? '';
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+
+  return {
+    blob,
+    filename: match?.[1] ?? `career-report-${sessionId}.pdf`,
+  };
+}
+
 export function sessionStreamUrl(sessionId: string): string {
   return `${BASE_URL}/sessions/${sessionId}/stream`;
 }

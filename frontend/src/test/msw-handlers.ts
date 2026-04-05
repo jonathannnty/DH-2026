@@ -56,4 +56,19 @@ export const defaultHandlers = [
   http.get(`${BASE}/sessions/:id/recommendations`, () =>
     HttpResponse.json(RECOMMENDATIONS),
   ),
+
+  // Report download
+  http.get(`${BASE}/sessions/:id/report`, ({ params }) => {
+    const sessionId = String(params.id);
+    return new HttpResponse(
+      `%PDF-1.4\n% Mock PDF for ${sessionId}\n`,
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="career-report-${sessionId.slice(0, 8)}.pdf"`,
+        },
+      },
+    );
+  }),
 ];

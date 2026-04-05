@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { getSession, getRecommendations } from "@/lib/api";
+import { downloadSessionReport, getSession, getRecommendations } from "@/lib/api";
 import { useSessionStream } from "@/hooks/useSessionStream";
 import { useTrack } from "@/hooks/useTrack";
 import { motion, useReducedMotion } from "framer-motion";
@@ -70,6 +70,30 @@ const pill: React.CSSProperties = {
   borderRadius: 20,
   fontSize: "0.8rem",
   color: "var(--pf-color-text-muted)",
+};
+
+const reportActions: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  gap: 12,
+  marginTop: 18,
+};
+
+const reportButton: React.CSSProperties = {
+  padding: "10px 18px",
+  background: "var(--pf-btn-secondary-bg)",
+  color: "var(--pf-btn-secondary-text)",
+  border: "1px solid var(--pf-btn-secondary-border)",
+  borderRadius: "var(--pf-radius-md)",
+  fontWeight: 600,
+  fontSize: "0.9rem",
+  cursor: "pointer",
+};
+
+const reportNote: React.CSSProperties = {
+  color: "var(--pf-color-text-muted)",
+  fontSize: "0.82rem",
 };
 
 // ─── Sub-components ───────────────────────────────────────────────
@@ -166,6 +190,8 @@ export default function Results() {
   const [stage, setStage] = useState("Starting analysis…");
   const [isFallback, setIsFallback] = useState(false);
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const track = useTrack(session?.trackId);
   const shouldStream = session?.status === "analyzing";
@@ -185,6 +211,30 @@ export default function Results() {
   const canRetryAnalysis = canPerformUiAction("retry-analysis", {
     results: resultsState,
   });
+
+  async function handleDownloadReport() {
+    if (!sessionId || isDownloadingReport) return;
+
+    setIsDownloadingReport(true);
+    setDownloadError(null);
+
+    try {
+      const { blob, filename } = await downloadSessionReport(sessionId);
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      anchor.rel = "noreferrer";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      setDownloadError("Unable to prepare the report download right now.");
+    } finally {
+      setIsDownloadingReport(false);
+    }
+  }
 
   // Load session
   useEffect(() => {
@@ -513,6 +563,27 @@ export default function Results() {
         >
           Pick one option below to focus your next steps.
         </p>
+        <div style={reportActions}>
+          <button
+            type="button"
+            onClick={handleDownloadReport}
+            disabled={isDownloadingReport}
+            style={{
+              ...reportButton,
+              opacity: isDownloadingReport ? 0.7 : 1,
+            }}
+          >
+            {isDownloadingReport ? "Preparing PDF…" : "Download PDF"}
+          </button>
+          <span style={reportNote}>
+            Downloads a PDF report you can share or print.
+          </span>
+        </div>
+        {downloadError && (
+          <p style={{ ...reportNote, color: "var(--pf-color-danger-500)", marginTop: 10 }}>
+            {downloadError}
+          </p>
+        )}
       </div>
 
       {resolvedRecs.map((rec, i) => (
