@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-import { getSession, sendMessage, triggerAnalysis } from "@/lib/api";
+import { getSession, sendMessage, triggerAnalysis, prefetchResearch } from "@/lib/api";
 import { ApiError } from "@/lib/api";
 import type { ChatMessage, CareerProfile } from "@/schemas/career";
 import { useTrack } from "@/hooks/useTrack";
@@ -178,6 +178,14 @@ export default function Onboarding() {
         }
 
         setLoadState("ready");
+
+        // Start background research so it completes by the time user finishes intake
+        const trackToResearch = s.trackId ?? routeTrack ?? undefined;
+        if (trackToResearch !== undefined) {
+          prefetchResearch(trackToResearch).catch((err) => {
+            console.warn("Prefetch research failed (non-blocking):", err);
+          });
+        }
       })
       .catch(() => setLoadState("error"));
   }, [sessionId, nav, routeTrack]);
@@ -281,6 +289,19 @@ export default function Onboarding() {
       );
     } catch (err) {
       setAnalyzing(false);
+
+      if (err instanceof ApiError && err.status === 503) {
+        try {
+          const parsed = JSON.parse(err.message) as { message?: string };
+          if (parsed.message?.includes("Agentverse-backed analysis is not ready")) {
+            setAnalyzeError("Agentverse pipeline is not ready.");
+            return;
+          }
+        } catch {
+          // Ignore parse failures and fall through to generic error handling.
+        }
+      }
+
       setAnalyzeError(
         err instanceof ApiError && err.status === 503
           ? "Analysis service unavailable. Try again in a moment."

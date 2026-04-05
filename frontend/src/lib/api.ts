@@ -79,11 +79,47 @@ export async function triggerAnalysis(
   return data as { ok: true };
 }
 
+export async function prefetchResearch(
+  trackId?: string,
+): Promise<Record<string, unknown>> {
+  // Call agent service directly to start background web research
+  const agentUrl = import.meta.env.VITE_AGENT_URL ?? "http://localhost:8000";
+  const res = await fetch(`${agentUrl}/research`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trackId: trackId ?? null }),
+  });
+  if (!res.ok) {
+    console.warn("Research prefetch failed:", res.status);
+    return {};
+  }
+  return res.json();
+}
+
 export async function getRecommendations(
   sessionId: string,
 ): Promise<CareerRecommendation[]> {
   const data = await request(`/sessions/${sessionId}/recommendations`);
   return CareerRecommendationSchema.array().parse(data);
+}
+
+export async function downloadSessionReport(
+  sessionId: string,
+): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(`${BASE_URL}/sessions/${sessionId}/report`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new ApiError(res.status, body);
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get('content-disposition') ?? '';
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+
+  return {
+    blob,
+    filename: match?.[1] ?? `career-report-${sessionId}.pdf`,
+  };
 }
 
 export function sessionStreamUrl(sessionId: string): string {

@@ -36,6 +36,8 @@ from models import (
     HealthResponse,
     SessionStatus,
     StatusResponse,
+    ResearchRequest,
+    ResearchResult,
 )
 from store import store
 
@@ -100,6 +102,81 @@ async def start_analysis(body: AnalyzeRequest) -> AnalyzeResponse:
 
     logger.info("Analysis started for session %s (track=%s)", body.sessionId, body.trackId)
     return AnalyzeResponse(sessionId=body.sessionId)
+
+
+# ── POST /research ────────────────────────────────────────────────────────────
+# Pre-fetch web research data while user is still answering intake questions.
+# Results are lightweight market data that will be used to enrich Claude analysis.
+
+RESEARCH_TASK_TEMPLATE = """\
+Research the job market for {track_label} careers. Return a JSON object with:
+1. topRoles: 3-5 most in-demand job titles in {track_name}
+2. marketInsights: 2-3 sentences on current market trends
+3. companies: 5-10 top companies actively hiring in {track_name}
+
+Return ONLY valid JSON like:
+{{
+  "topRoles": ["Role 1", "Role 2"],
+  "marketInsights": "Current market insight...",
+  "companies": ["Company A", "Company B"]
+}}
+"""
+
+TRACK_RESEARCH_CONTEXT: dict[str, tuple[str, str]] = {
+    "tech-career": ("Tech & Software Engineering", "software engineering"),
+    "healthcare-pivot": ("Healthcare & Health-Tech", "healthcare and health-tech"),
+    "creative-industry": ("Creative & Design", "creative industries and media"),
+    "general": ("Technology", "technology and software"),
+}
+
+
+async def _do_research(track_id: Optional[str]) -> ResearchResult:
+    """Run web research using Browser Use (if available), return market data."""
+    if not BROWSER_USE_AVAILABLE:
+        logger.info("Browser Use unavailable — skipping research enrichment")
+        return ResearchResult()
+
+    track_label, track_name = TRACK_RESEARCH_CONTEXT.get(
+        track_id, TRACK_RESEARCH_CONTEXT["general"]
+    )
+    task = RESEARCH_TASK_TEMPLATE.format(
+        track_label=track_label, track_name=track_name
+    )
+
+    try:
+        from browser_use import Agent as BrowserAgent
+        from langchain_anthropic import ChatAnthropic
+        import json
+
+        llm = ChatAnthropic(
+            model="claude-haiku-4-5-20251001",
+            api_key=os.environ["ANTHROPIC_API_KEY"],
+        )
+        agent = BrowserAgent(task=task, llm=llm)
+        result = await asyncio.wait_for(agent.run(), timeout=30.0)
+        raw = result.final_result() if hasattr(result, "final_result") else str(result)
+
+        # Extract JSON
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        if start >= 0 and end > start:
+            data = json.loads(raw[start:end])
+            return ResearchResult(
+                topRoles=data.get("topRoles", []),
+                marketInsights=data.get("marketInsights"),
+                companies=data.get("companies", []),
+            )
+    except (asyncio.TimeoutError, json.JSONDecodeError, Exception) as exc:
+        logger.warning("Research task failed: %s", exc)
+
+    return ResearchResult()
+
+
+@app.post("/research", response_model=ResearchResult)
+async def prefetch_research(body: ResearchRequest) -> ResearchResult:
+    """Pre-fetch web research data for later analysis enrichment."""
+    logger.info("Research started for session %s (track=%s)", body.sessionId, body.trackId)
+    return await _do_research(body.trackId)
 
 
 # ── GET /status/{sessionId} ───────────────────────────────────────────────────

@@ -61,6 +61,18 @@ class AnalyzeResponse(BaseModel):
     sessionId: str
 
 
+class ResearchRequest(BaseModel):
+    sessionId: str
+    trackId: Optional[str] = None
+
+
+class ResearchResult(BaseModel):
+    """Pre-fetched web research data to enrich later Claude analysis."""
+    topRoles: list[str] = Field(default_factory=list)  # Top job titles in the track
+    marketInsights: Optional[str] = None  # General market trends
+    companies: list[str] = Field(default_factory=list)  # Companies actively hiring
+
+
 class SessionStatus(str, Enum):
     pending = "pending"
     analyzing = "analyzing"

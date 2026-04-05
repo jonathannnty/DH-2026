@@ -5,7 +5,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { getSession, getRecommendations } from "@/lib/api";
+import { getSession, getRecommendations, downloadSessionReport } from "@/lib/api";
 import { useSessionStream } from "@/hooks/useSessionStream";
 import { useTrack } from "@/hooks/useTrack";
 import { motion, useReducedMotion } from "framer-motion";
@@ -82,6 +82,33 @@ const pill: React.CSSProperties = {
   padding: "5px 12px",
   background: "var(--pf-color-bg-subtle)",
   borderRadius: 20,
+  fontSize: "0.8rem",
+  color: "var(--pf-color-text-muted)",
+};
+
+const reportActions: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  marginTop: 16,
+  marginBottom: 24,
+  padding: "12px 16px",
+  background: "var(--pf-color-bg-subtle)",
+  borderRadius: "var(--pf-radius-md)",
+};
+
+const reportButton: React.CSSProperties = {
+  padding: "8px 16px",
+  background: "var(--pf-btn-primary-bg)",
+  color: "var(--pf-btn-primary-text)",
+  border: "none",
+  borderRadius: "var(--pf-radius-md)",
+  fontWeight: 600,
+  cursor: "pointer",
+  fontSize: "0.85rem",
+};
+
+const reportNote: React.CSSProperties = {
   fontSize: "0.8rem",
   color: "var(--pf-color-text-muted)",
 };
@@ -181,6 +208,8 @@ export default function Results() {
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState("Starting analysis…");
   const [isFallback, setIsFallback] = useState(false);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   // Stuck-analyzer: if no SSE progress after 35s, show recovery UI instead of spinning forever
   const [isStuck, setIsStuck] = useState(false);
   const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -273,7 +302,8 @@ export default function Results() {
     }
   }, [stream.latestEvent, sessionId]);
 
-  // SSE closed without delivering recs (connection dropped) — re-fetch session once
+  // SSE closed/error while still analyzing can miss the terminal event in some
+  // browser/network conditions. Poll session state briefly until complete.
   useEffect(() => {
     if (stream.status !== "closed" && stream.status !== "error") return;
     if (recs || fetchError || !sessionId) return;
@@ -616,6 +646,31 @@ export default function Results() {
 
   const resolvedRecs = recs ?? [];
 
+  // ── Download Report Handler ────────────────────────────────────
+
+  const handleDownloadReport = async () => {
+    if (!sessionId) return;
+    setIsDownloadingReport(true);
+    setDownloadError(null);
+    try {
+      const result = await downloadSessionReport(sessionId);
+      const url = window.URL.createObjectURL(result.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      setDownloadError(
+        err instanceof Error ? err.message : "Failed to download report"
+      );
+    } finally {
+      setIsDownloadingReport(false);
+    }
+  };
+
   // ── Full results ──
   return (
     <motion.div
@@ -636,6 +691,41 @@ export default function Results() {
           Each match is scored across 12 profile dimensions. The top result is
           your strongest fit based on skills, values, and goals.
         </p>
+        <p style={{ color: "var(--pf-color-text-muted)", maxWidth: 540 }}>
+          Each match is scored across 12 profile dimensions. The top result is
+          your strongest fit based on skills, values, goals, and market research.
+        </p>
+        <p
+          style={{
+            color: "var(--pf-color-text-muted)",
+            maxWidth: 540,
+            fontSize: "0.88rem",
+            marginTop: 8,
+          }}
+        >
+          Pick one option below to focus your next steps.
+        </p>
+        <div style={reportActions}>
+          <button
+            type="button"
+            onClick={handleDownloadReport}
+            disabled={isDownloadingReport}
+            style={{
+              ...reportButton,
+              opacity: isDownloadingReport ? 0.7 : 1,
+            }}
+          >
+            {isDownloadingReport ? "Preparing PDF…" : "Download PDF"}
+          </button>
+          <span style={reportNote}>
+            Downloads a PDF report you can share or print.
+          </span>
+        </div>
+        {downloadError && (
+          <p style={{ ...reportNote, color: "var(--pf-color-danger-500)", marginTop: 10 }}>
+            {downloadError}
+          </p>
+        )}
       </div>
 
       {resolvedRecs.map((rec, i) => (

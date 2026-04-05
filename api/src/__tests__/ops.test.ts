@@ -139,6 +139,24 @@ describe('Ops: control panel', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('GET /sessions/:id/report — returns a downloadable PDF report', async () => {
+    const scenario = await app.inject({
+      method: 'POST',
+      url: '/ops/scenarios/nurse-to-healthtech/run',
+    });
+    const sessionId: string = scenario.json().sessionId;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sessions/${sessionId}/report`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('application/pdf');
+    expect(res.headers['content-disposition']).toContain(`career-report-${sessionId.slice(0, 8)}.pdf`);
+    expect(res.body.length).toBeGreaterThan(0);
+  });
 });
 
 describe('Ops: DB admin — snapshot/restore', () => {
