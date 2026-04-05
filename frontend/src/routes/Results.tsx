@@ -462,21 +462,38 @@ export default function Results() {
           <p style={{ fontWeight: 600, fontSize: "1.1rem" }}>
             Analysis is taking longer than expected
           </p>
-          <p style={{ color: "var(--pf-color-text-muted)", maxWidth: 380, fontSize: "0.875rem" }}>
+          <p
+            style={{
+              color: "var(--pf-color-text-muted)",
+              maxWidth: 380,
+              fontSize: "0.875rem",
+            }}
+          >
             The analysis stream went quiet. Your results may already be ready —
             try refreshing, or go to the dashboard to check the session status.
           </p>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              flexWrap: "wrap",
+              justifyContent: "center",
+            }}
+          >
             <button
               onClick={() => {
                 setIsStuck(false);
                 if (sessionId) {
-                  getSession(sessionId).then((s) => {
-                    setSession(s);
-                    if (s.status === "complete") {
-                      getRecommendations(sessionId).then(setRecs).catch(() => setRecs([]));
-                    }
-                  }).catch(() => window.location.reload());
+                  getSession(sessionId)
+                    .then((s) => {
+                      setSession(s);
+                      if (s.status === "complete") {
+                        getRecommendations(sessionId)
+                          .then(setRecs)
+                          .catch(() => setRecs([]));
+                      }
+                    })
+                    .catch(() => window.location.reload());
                 }
               }}
               style={{
