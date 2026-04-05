@@ -274,7 +274,8 @@ const featureCardExplanation: React.CSSProperties = {
 const featureCardMotif: React.CSSProperties = {
   position: "relative",
   borderRadius: "calc(var(--pf-radius-md) - 2px)",
-  border: "1px solid color-mix(in srgb, var(--pf-color-brand-500) 14%, var(--pf-surface-card-border))",
+  border:
+    "1px solid color-mix(in srgb, var(--pf-color-brand-500) 14%, var(--pf-surface-card-border))",
   background:
     "linear-gradient(180deg, color-mix(in srgb, var(--pf-color-brand-500) 7%, transparent), color-mix(in srgb, var(--pf-color-bg-subtle) 72%, transparent))",
   minHeight: 216,
@@ -1861,7 +1862,9 @@ export default function Home() {
             initial={reduceMotion ? false : { opacity: 0, y: 10 }}
             animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
             transition={
-              reduceMotion ? undefined : { duration: 0.22, delay: 0.08 + index * 0.04 }
+              reduceMotion
+                ? undefined
+                : { duration: 0.22, delay: 0.08 + index * 0.04 }
             }
           >
             <div style={featureCardCopy}>
